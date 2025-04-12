@@ -1,0 +1,32 @@
+[package]
+name = "localestia"
+version = "0.1.0"
+edition = "2021"
+description = "Local in-memory implementation of the Celestia Blob API"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+celestia-types = "0.11.0"
+tendermint = "0.40.3"
+ed25519-consensus = "2.1.0"
+rand = "0.8.5"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonrpsee = { version = "0.16", features = ["server", "macros"] }
+redis = { version = "0.22", features = ["tokio-comp"] }
+hex = "0.4"
+uuid = { version = "1.3", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1.0.86"
+sha2 = { version = "0.10.8", default-features = false }
+tower-http = { version = "0.4", features = ["cors", "trace", "timeout"] }
+tower = "0.4"
+
+[[bin]]
+name = "localestia"
+path = "src/main.rs"

@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Environment
+.env
+.env.*
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Debug files
+*.log
+*.pid
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo

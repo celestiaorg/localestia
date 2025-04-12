@@ -1,0 +1,95 @@
+# localestia
+
+localestia is celestia at home, a simple mock for performing integration testing and for experimentation, built using redis as a backend for a celestia-node compatible jsonrpc server. To try it out locally:
+
+```
+cargo run
+```
+
+## Supported RPC Methods
+
+Localestia implements the following JSON-RPC methods:
+
+### Blob Methods
+
+| Method | Description | Parameters |
+| ------ | ----------- | ---------- |
+| `blob.Get` | Retrieves a blob by height, namespace, and commitment | `height: u64`, `namespace: Namespace`, `commitment: Commitment` |
+| `blob.Submit` | Submits one or more blobs and returns the height | `blobs: Vec<Blob>`, `opts: TxConfig` |
+| `blob.Included` | Checks if a blob is included at a specified height | `height: u64`, `namespace: Namespace`, `proof: NamespaceProof`, `commitment: Commitment` |
+
+### Header Methods
+
+| Method | Description | Parameters |
+| ------ | ----------- | ---------- |
+| `header.GetByHash` | Gets a header by its hash | `hash: Hash` |
+| `header.GetByHeight` | Gets a header at a specific height | `height: u64` |
+| `header.GetRangeByHeight` | Gets a range of headers | `from: u64`, `to: u64` |
+| `header.WaitForHeight` | Waits for a header at a specific height | `height: u64` |
+
+### Share Methods
+
+| Method | Description | Parameters |
+| ------ | ----------- | ---------- |
+| `share.GetEDS` | Gets the Extended Data Square at a height | `height: u64` |
+| `share.GetRange` | Gets a range of shares | `height: u64`, `start: u64`, `end: u64` |
+
+## Usage Examples
+
+### Submit a Blob
+
+```bash
+curl -X POST "http://localhost:26658" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "blob.Submit",
+    "params": [
+      [
+        {
+          "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=",
+          "data": "SGVsbG8gQ2VsZXN0aWEh",
+          "share_version": 0,
+          "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=",
+          "index": null
+        }
+      ],
+      {
+        "gas_limit": 100000,
+        "fee": 2000,
+        "memo": "test submit"
+      }
+    ]
+  }'
+```
+
+### Get a Header
+
+```bash
+curl -X POST "http://localhost:26658" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "header.GetByHeight",
+    "params": [1]
+  }'
+```
+
+### Get Extended Data Square
+
+```bash
+curl -X POST "http://localhost:26658" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "share.GetEDS",
+    "params": [1]
+  }'
+```
+
+## Docker Setup
+
+See the [Docker Usage Guide](DOCKER.md) for instructions on running Localestia with Docker.
