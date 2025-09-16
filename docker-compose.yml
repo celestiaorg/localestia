@@ -11,13 +11,13 @@ services:
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 1s
       timeout: 1s
-      retries: 3
+      retries: 5
     restart: unless-stopped
 
   localestia:
-    build: .
+    image: localestia:latest
     depends_on:
       redis:
         condition: service_healthy
