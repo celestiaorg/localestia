@@ -1,0 +1,33 @@
+services:
+  redis:
+    # https://hub.docker.com/_/redis
+    image: redis:8.2.1-alpine
+    # By default, runs with in-memory storage only. Data will be lost if the container restarts.
+    # Uncomment the following lines to enable persistence (and `volumes:` at EOF):
+    # command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    # volumes:
+    #   - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 1s
+      retries: 3
+    restart: unless-stopped
+
+  localestia:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      LISTEN_ADDR: ${LISTEN_ADDR:-0.0.0.0:26658}
+      CLEAR_REDIS: ${CLEAR_REDIS:-true}
+    ports:
+      - "26658:26658"
+    restart: unless-stopped
+# Uncomment if enabling persistence above
+# volumes:
+#   redis-data:

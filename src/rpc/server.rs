@@ -1,4 +1,3 @@
-use celestia_types::eds::RawExtendedDataSquare;
 use celestia_types::hash::Hash;
 use celestia_types::nmt::{Namespace, NamespaceProof};
 use celestia_types::{Blob, Commitment, ExtendedDataSquare, ExtendedHeader};

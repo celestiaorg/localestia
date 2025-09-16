@@ -41,7 +41,7 @@ You can configure the application through environment variables in the `docker-c
 environment:
   - REDIS_URL=redis://redis:6379
   - LISTEN_ADDR=0.0.0.0:26658
-  - CLEAR_REDIS=true
+  - CLEAR_REDIS=false
 ```
 
 ### Environment Variables
@@ -52,7 +52,9 @@ environment:
 
 ## Data Persistence
 
-Redis data is stored in a Docker volume `redis-data`. To completely reset the data:
+Redis data is note persisted by default.
+If you uncomment to enable that in [docker-compose.yaml](./docker-compose.yml) stored in a Docker volume `redis-data`.
+To completely reset the data:
 
 ```bash
 docker-compose down -v
@@ -88,5 +90,5 @@ To expose your API on a different port:
 
 ```yaml
 ports:
-  - "8080:26658"  # Maps host port 8080 to container port 26658
+  - "8080:26658" # Maps host port 8080 to container port 26658
 ```
