@@ -9,7 +9,13 @@ This guide explains how to build and run your Localestia application using Docke
 
 ## Quick Start
 
-1. Build and start the services:
+1. Build a new image for localestia (pulls in any source changes):
+
+```bash
+docker build -t localestia:latest .
+```
+
+2. Start the services:
 
 ```bash
 docker-compose up -d
@@ -18,10 +24,10 @@ docker-compose up -d
 This will:
 
 - Start a Redis instance
-- Build and start your Localestia application
+- Start your Localestia application
 - Make the API available at <http://localhost:26658>
 
-2. Check the logs:
+3. Check the logs:
 
 ```bash
 docker-compose logs -f localestia
@@ -39,9 +45,9 @@ You can configure the application through environment variables in the `docker-c
 
 ```yaml
 environment:
-  - REDIS_URL=redis://redis:6379
-  - LISTEN_ADDR=0.0.0.0:26658
-  - CLEAR_REDIS=true
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+  LISTEN_ADDR: ${LISTEN_ADDR:-0.0.0.0:26658}
+  CLEAR_REDIS: ${CLEAR_REDIS:-false}
 ```
 
 ### Environment Variables
@@ -52,21 +58,13 @@ environment:
 
 ## Data Persistence
 
-Redis data is stored in a Docker volume `redis-data`. To completely reset the data:
+Redis data is _not_ persisted by default.
+If you uncomment to enable that in [docker-compose.yaml](./docker-compose.yml), data is persisted in a `redis-data` Docker volume.
+To completely reset the data:
 
 ```bash
 docker-compose down -v
 ```
-
-## Building for Production
-
-For production deployments, you can build a Docker image:
-
-```bash
-docker build -t localestia:latest .
-```
-
-This creates an optimized image that you can deploy to any Docker-compatible environment.
 
 ## Customization
 
@@ -88,5 +86,5 @@ To expose your API on a different port:
 
 ```yaml
 ports:
-  - "8080:26658"  # Maps host port 8080 to container port 26658
+  - "8080:26658" # Maps host port 8080 to container port 26658
 ```

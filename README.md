@@ -12,27 +12,27 @@ Localestia implements the following JSON-RPC methods:
 
 ### Blob Methods
 
-| Method | Description | Parameters |
-| ------ | ----------- | ---------- |
-| `blob.Get` | Retrieves a blob by height, namespace, and commitment | `height: u64`, `namespace: Namespace`, `commitment: Commitment` |
-| `blob.Submit` | Submits one or more blobs and returns the height | `blobs: Vec<Blob>`, `opts: TxConfig` |
-| `blob.Included` | Checks if a blob is included at a specified height | `height: u64`, `namespace: Namespace`, `proof: NamespaceProof`, `commitment: Commitment` |
+| Method          | Description                                           | Parameters                                                                               |
+| --------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `blob.Get`      | Retrieves a blob by height, namespace, and commitment | `height: u64`, `namespace: Namespace`, `commitment: Commitment`                          |
+| `blob.Submit`   | Submits one or more blobs and returns the height      | `blobs: Vec<Blob>`, `opts: TxConfig`                                                     |
+| `blob.Included` | Checks if a blob is included at a specified height    | `height: u64`, `namespace: Namespace`, `proof: NamespaceProof`, `commitment: Commitment` |
 
 ### Header Methods
 
-| Method | Description | Parameters |
-| ------ | ----------- | ---------- |
-| `header.GetByHash` | Gets a header by its hash | `hash: Hash` |
-| `header.GetByHeight` | Gets a header at a specific height | `height: u64` |
-| `header.GetRangeByHeight` | Gets a range of headers | `from: u64`, `to: u64` |
-| `header.WaitForHeight` | Waits for a header at a specific height | `height: u64` |
+| Method                    | Description                             | Parameters             |
+| ------------------------- | --------------------------------------- | ---------------------- |
+| `header.GetByHash`        | Gets a header by its hash               | `hash: Hash`           |
+| `header.GetByHeight`      | Gets a header at a specific height      | `height: u64`          |
+| `header.GetRangeByHeight` | Gets a range of headers                 | `from: u64`, `to: u64` |
+| `header.WaitForHeight`    | Waits for a header at a specific height | `height: u64`          |
 
 ### Share Methods
 
-| Method | Description | Parameters |
-| ------ | ----------- | ---------- |
-| `share.GetEDS` | Gets the Extended Data Square at a height | `height: u64` |
-| `share.GetRange` | Gets a range of shares | `height: u64`, `start: u64`, `end: u64` |
+| Method           | Description                               | Parameters                              |
+| ---------------- | ----------------------------------------- | --------------------------------------- |
+| `share.GetEDS`   | Gets the Extended Data Square at a height | `height: u64`                           |
+| `share.GetRange` | Gets a range of shares                    | `height: u64`, `start: u64`, `end: u64` |
 
 ## Usage Examples
 

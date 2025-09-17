@@ -1,7 +1,7 @@
 use jsonrpsee::server::ServerBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod error;
 mod rpc;
@@ -15,16 +15,13 @@ use storage::RedisStorage;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<LocalError>> {
-    // Initialize logging
     tracing_subscriber::fmt::init();
 
-    // Parse command line arguments
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let listen_addr =
         std::env::var("LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:26658".to_string());
 
-    // Create a new error variant for AddrParseError
     let addr: SocketAddr = listen_addr.parse().map_err(|e| {
         Box::new(LocalError::TransactionError(format!(
             "Failed to parse address: {}",
@@ -51,9 +48,13 @@ async fn main() -> Result<(), Box<LocalError>> {
         return Err(Box::new(e));
     }
 
-    if let Err(e) = storage.clear_database().await {
-        error!("Failed to clear Redis database: {}", e);
-        return Err(Box::new(e));
+    // Clear DB if requested (default true)
+    let do_clear = std::env::var("CLEAR_REDIS").ok().map_or(true, |v| v == "true");
+    if do_clear {
+        if let Err(e) = storage.clear_database().await {
+            error!("Failed to clear Redis database: {}", e);
+            return Err(Box::new(e));
+        }
     }
 
     // Create our RPC services
@@ -67,7 +68,6 @@ async fn main() -> Result<(), Box<LocalError>> {
         )))
     })?;
 
-    // Register our RPC methods (both Blob and Header)
     let server_handle = server.start(rpc_server.into_rpc()).map_err(|e| {
         Box::new(LocalError::TransactionError(format!(
             "Failed to start server: {}",
@@ -76,29 +76,57 @@ async fn main() -> Result<(), Box<LocalError>> {
     })?;
 
     info!("Server started successfully");
-    info!(
-        "The server is ready to accept RPC calls at ws://{}",
-        listen_addr
-    );
-    info!(
-        "Connect using: celestia-rpc::Client::new(\"ws://{}\", None)",
-        listen_addr
-    );
+    info!("The server is ready at [http|ws]://{}", listen_addr);
 
-    // Keep the server running until Ctrl+C
-    match tokio::signal::ctrl_c().await {
-        Ok(_) => info!("Received shutdown signal"),
-        Err(e) => error!("Failed to listen for ctrl-c: {}", e),
-    }
+    // Wait for SIGINT/SIGTERM/SIGQUIT
+    shutdown_signal().await;
 
     info!("Shutting down server...");
 
-    // Stop the server
+    // 🔑 Tell jsonrpsee to stop, then await the stop; no dropping tricks.
     if let Err(e) = server_handle.stop() {
-        error!("Error stopping server: {}", e);
+        error!("Error requesting server stop: {}", e);
+    }
+
+    // Avoid hanging forever if a background task misbehaves.
+    let stop_timeout = std::time::Duration::from_secs(2);
+    match tokio::time::timeout(stop_timeout, server_handle.stopped()).await {
+        Ok(_) => info!("Server reported stopped."),
+        Err(_) => {
+            warn!("Server didn't stop within {:?}; killing process...", stop_timeout);
+        }
     }
 
     info!("Server shutdown complete");
-
     Ok(())
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    let mut sigint = signal(SignalKind::interrupt()).expect("listen to SIGINT");
+    let mut sigterm = signal(SignalKind::terminate()).expect("listen to SIGTERM");
+    let mut sigquit = signal(SignalKind::quit()).expect("listen to SIGQUIT");
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutdown requested via Ctrl+C (SIGINT)");
+        }
+        _ = sigint.recv() => {
+            info!("Shutdown requested via SIGINT");
+        }
+        _ = sigterm.recv() => {
+            info!("Shutdown requested via SIGTERM");
+        }
+        _ = sigquit.recv() => {
+            info!("Shutdown requested via SIGQUIT");
+        }
+    }
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+    info!("Shutdown requested via Ctrl+C");
 }

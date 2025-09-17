@@ -377,7 +377,7 @@ impl RedisStorage {
         for blob_key in &blob_keys {
             // Get blob data with timeout
             let blob_data: Option<String> =
-                match tokio::time::timeout(std::time::Duration::from_secs(5), conn.get(&blob_key))
+                match tokio::time::timeout(std::time::Duration::from_secs(5), conn.get(blob_key))
                     .await
                 {
                     Ok(result) => result.map_err(|e| {

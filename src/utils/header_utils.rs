@@ -3,8 +3,6 @@ use celestia_types::block::CommitExt;
 use celestia_types::hash::{Hash, HashExt};
 use celestia_types::{DataAvailabilityHeader, ExtendedDataSquare, ExtendedHeader, ValidatorSet};
 use ed25519_consensus::SigningKey;
-use rand::{thread_rng, Rng};
-use tendermint::account::Id;
 use tendermint::block::header::Version;
 use tendermint::block::{parts, Commit, CommitSig, Header};
 use tendermint::{chain, PublicKey, Signature, Time};
