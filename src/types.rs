@@ -11,7 +11,6 @@ pub struct TxConfig {
     pub memo: Option<String>,
 }
 
-
 // Response type for blob.Subscribe notifications
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
