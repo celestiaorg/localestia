@@ -27,7 +27,7 @@ RUN case "$TARGETPLATFORM" in \
 FROM --platform=$TARGETPLATFORM alpine:3.19
 
 # Install runtime dependencies (minimal)
-RUN apk add --no-cache ca-certificates openssl libc6-compat
+RUN apk add --no-cache ca-certificates openssl libc6-compat netcat-openbsd
 
 WORKDIR /app
 
