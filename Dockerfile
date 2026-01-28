@@ -1,9 +1,10 @@
 # Use a multi-platform base image
-FROM --platform=$BUILDPLATFORM rust:1.87-alpine AS builder
+FROM --platform=$TARGETPLATFORM rust:1.88-alpine AS builder
 
 # Set build arguments to support cross-compilation
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
+ARG TARGETARCH
 
 WORKDIR /usr/src/app
 COPY . .
@@ -11,15 +12,16 @@ COPY . .
 # Install build dependencies for Rust on Alpine
 RUN apk add --no-cache build-base openssl-dev pkgconf
 
-# Install cross-compilation tools if needed
-RUN if [ "$BUILDPLATFORM" != "$TARGETPLATFORM" ]; then \
-    rustup target add aarch64-unknown-linux-musl x86_64-unknown-linux-musl; \
-    fi
+# Add the appropriate Rust target for the platform
+RUN case "$TARGETARCH" in \
+    "amd64") rustup target add x86_64-unknown-linux-musl ;; \
+    "arm64") rustup target add aarch64-unknown-linux-musl ;; \
+    esac
 
 # Build with release optimizations (using the appropriate musl target)
-RUN case "$TARGETPLATFORM" in \
-    "linux/amd64") cargo build --release --target x86_64-unknown-linux-musl ;; \
-    "linux/arm64") cargo build --release --target aarch64-unknown-linux-musl ;; \
+RUN case "$TARGETARCH" in \
+    "amd64") cargo build --release --target x86_64-unknown-linux-musl ;; \
+    "arm64") cargo build --release --target aarch64-unknown-linux-musl ;; \
     *) cargo build --release ;; \
     esac
 
