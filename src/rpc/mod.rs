@@ -1,5 +1,6 @@
-pub mod api;
+mod blob;
+mod header;
 pub mod server;
+mod share;
 
-pub use api::CombinedRpcServer;
-pub use server::BlobRpcServerImpl;
+pub use server::{rpc_error, LocalestiaServer};

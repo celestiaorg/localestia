@@ -9,8 +9,11 @@ mod storage;
 mod types;
 mod utils;
 
+use celestia_rpc::BlobRpcServer;
+use celestia_rpc::HeaderRpcServer;
+use celestia_rpc::ShareRpcServer;
 use error::LocalError;
-use rpc::{BlobRpcServerImpl, CombinedRpcServer};
+use rpc::LocalestiaServer;
 use storage::RedisStorage;
 
 #[tokio::main]
@@ -57,7 +60,25 @@ async fn main() -> Result<(), Box<LocalError>> {
     }
 
     // Create our RPC services
-    let rpc_server = BlobRpcServerImpl::new(storage.clone());
+    let rpc_server = LocalestiaServer::new(storage.clone());
+
+    let mut module = BlobRpcServer::into_rpc(rpc_server.clone());
+    module
+        .merge(HeaderRpcServer::into_rpc(rpc_server.clone()))
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to merge header RPC: {}",
+                e
+            )))
+        })?;
+    module
+        .merge(ShareRpcServer::into_rpc(rpc_server))
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to merge share RPC: {}",
+                e
+            )))
+        })?;
 
     // Build and start the JSON-RPC server
     let server = ServerBuilder::default().build(addr).await.map_err(|e| {
@@ -68,12 +89,7 @@ async fn main() -> Result<(), Box<LocalError>> {
     })?;
 
     // Register our RPC methods (both Blob and Header)
-    let server_handle = server.start(rpc_server.into_rpc()).map_err(|e| {
-        Box::new(LocalError::TransactionError(format!(
-            "Failed to start server: {}",
-            e
-        )))
-    })?;
+    let server_handle = server.start(module);
 
     info!("Server started successfully");
     info!(
