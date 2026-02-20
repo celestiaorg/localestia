@@ -6,6 +6,52 @@ localestia is celestia at home, a simple mock for performing integration testing
 cargo run
 ```
 
+## Prerequisites
+
+- Rust toolchain (cargo) installed via <https://rustup.rs>
+- Redis running locally or reachable via `REDIS_URL` (install via your package manager or `docker run --rm -p 6379:6379 redis:7`)
+- curl installed (required for CLI-based integration tests; install via your package manager)
+- Docker (optional, only needed for `LOCALESTIA_REDIS_MODE=docker` test runs)
+
+## Build
+
+```bash
+cargo build
+```
+
+```bash
+cargo build --release
+```
+
+## Run
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379 LISTEN_ADDR=127.0.0.1:26658 cargo run
+```
+
+Defaults if unset:
+
+- `REDIS_URL=redis://127.0.0.1:6379`
+- `LISTEN_ADDR=127.0.0.1:26658`
+
+Localestia clears the Redis database on startup.
+
+## Test
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379 cargo test
+```
+
+Tests require a running Redis instance. CLI integration tests also require curl.
+
+To have tests start Redis automatically via Docker:
+
+```bash
+LOCALESTIA_REDIS_MODE=docker cargo test
+```
+
+You can also use `LOCALESTIA_REDIS_MODE=auto` to prefer a local `REDIS_URL` if set and fall back to Docker when available.
+
 ## Supported RPC Methods
 
 Localestia implements the following JSON-RPC methods:
