@@ -21,21 +21,21 @@ This will:
 - Build and start your Localestia application
 - Make the API available at <http://localhost:26658>
 
-2. Check the logs:
+1. Check the logs:
 
 ```bash
-docker-compose logs -f localestia
+docker compose logs -f localestia
 ```
 
-3. Stop the services:
+1. Stop the services:
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## Configuration
 
-You can configure the application through environment variables in the `docker-compose.yml` file:
+You can configure the application through environment variables in the `docker-compose.yaml` file:
 
 ```yaml
 environment:
@@ -74,7 +74,7 @@ This creates an optimized image that you can deploy to any Docker-compatible env
 
 If you want to use an external Redis instance instead of the Docker container:
 
-1. Remove the `redis` service from `docker-compose.yml`
+1. Remove the `redis` service from `docker-compose.yaml`
 2. Update the `REDIS_URL` in the localestia service
 
 ```yaml

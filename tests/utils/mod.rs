@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
 use celestia_rpc::prelude::*;
-use celestia_rpc::{BlobRpcServer, HeaderRpcServer, ShareRpcServer};
+use celestia_rpc::{BlobRpcServer, HeaderRpcServer};
 use celestia_rpc::{Client, TxConfig};
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee_core::client::Error as RpcError;
 use jsonrpsee_types::error::{INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE};
-use localestia::rpc::LocalestiaServer;
+use localestia::rpc::{LocalestiaServer, ShareRpcServer as LocalShareRpcServer};
 use localestia::storage::RedisStorage;
 use once_cell::sync::Lazy;
 use std::env;
@@ -82,7 +82,7 @@ pub async fn setup() -> TestContext {
         .merge(HeaderRpcServer::into_rpc(rpc_server.clone()))
         .expect("failed to merge header RPC module");
     module
-        .merge(ShareRpcServer::into_rpc(rpc_server))
+        .merge(LocalShareRpcServer::into_rpc(rpc_server))
         .expect("failed to merge share RPC module");
     let server_handle = server.start(module);
 
@@ -452,7 +452,7 @@ async fn wait_for_redis(redis_url: &str, mode: RedisMode) {
 
     loop {
         match redis::Client::open(redis_url) {
-            Ok(client) => match client.get_async_connection().await {
+            Ok(client) => match client.get_multiplexed_async_connection().await {
                 Ok(mut conn) => {
                     let pong: redis::RedisResult<String> =
                         redis::cmd("PING").query_async(&mut conn).await;

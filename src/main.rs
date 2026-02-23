@@ -11,7 +11,7 @@ mod utils;
 
 use celestia_rpc::BlobRpcServer;
 use celestia_rpc::HeaderRpcServer;
-use celestia_rpc::ShareRpcServer;
+use crate::rpc::ShareRpcServer;
 use error::LocalError;
 use rpc::LocalestiaServer;
 use storage::RedisStorage;

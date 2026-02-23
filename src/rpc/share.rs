@@ -1,13 +1,63 @@
-use celestia_rpc::share::{GetRangeResponse, RawGetRowResponse, RowSide, SampleCoordinates};
-use celestia_rpc::ShareRpcServer;
+use celestia_rpc::share::{GetRangeResponse, RowSide, SampleCoordinates};
 use celestia_types::eds::RawExtendedDataSquare;
 use celestia_types::namespace_data::NamespaceData;
 use celestia_types::nmt::Namespace;
 use celestia_types::sample::{RawSample, Sample};
 use celestia_types::{AxisType, RawShare};
 use jsonrpsee::core::{async_trait as jsonrpsee_async_trait, RpcResult};
+use jsonrpsee::proc_macros::rpc;
+use serde::{Deserialize, Serialize};
 
 use crate::rpc::{rpc_error, LocalestiaServer};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawGetRowResponse {
+    pub shares: Vec<RawShare>,
+    pub side: RowSide,
+}
+
+impl RawGetRowResponse {
+    pub fn new(shares: Vec<RawShare>, side: RowSide) -> Self {
+        Self { shares, side }
+    }
+}
+
+#[rpc(server, namespace = "share", namespace_separator = ".")]
+pub trait ShareRpc {
+    #[method(name = "GetEDS")]
+    async fn share_get_eds(&self, height: u64) -> RpcResult<RawExtendedDataSquare>;
+
+    #[method(name = "GetRange")]
+    async fn share_get_range(
+        &self,
+        height: u64,
+        start: u64,
+        end: u64,
+    ) -> RpcResult<GetRangeResponse>;
+
+    #[method(name = "GetSamples")]
+    async fn share_get_samples(
+        &self,
+        height: u64,
+        indices: Vec<SampleCoordinates>,
+    ) -> RpcResult<Vec<RawSample>>;
+
+    #[method(name = "GetRow")]
+    async fn share_get_row(&self, height: u64, row: u16) -> RpcResult<RawGetRowResponse>;
+
+    #[method(name = "GetShare")]
+    async fn share_get_share(&self, height: u64, row: u16, col: u16) -> RpcResult<RawShare>;
+
+    #[method(name = "GetNamespaceData")]
+    async fn share_get_namespace_data(
+        &self,
+        height: u64,
+        namespace: Namespace,
+    ) -> RpcResult<NamespaceData>;
+
+    #[method(name = "SharesAvailable")]
+    async fn share_shares_available(&self, height: u64) -> RpcResult<()>;
+}
 
 // Implementation of the ShareRPCServer for LocalestiaServer
 #[jsonrpsee_async_trait]

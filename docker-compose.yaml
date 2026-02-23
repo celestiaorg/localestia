@@ -1,0 +1,22 @@
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  localestia:
+    build:
+      context: .
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379
+      LISTEN_ADDR: 0.0.0.0:26658
+      CLEAR_REDIS: "true"
+    ports:
+      - "26658:26658"
+    restart: unless-stopped
+
+volumes:
+  redis-data:
