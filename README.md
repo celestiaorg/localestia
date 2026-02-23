@@ -11,7 +11,7 @@ cargo run
 - Rust toolchain (cargo) installed via <https://rustup.rs>
 - Redis running locally or reachable via `REDIS_URL` (install via your package manager or `docker run --rm -p 6379:6379 redis:7`)
 - curl installed (required for CLI-based integration tests; install via your package manager)
-- Docker (optional, only needed for `LOCALESTIA_REDIS_MODE=docker` test runs)
+- Docker (optional, only needed for `LOCALESTIA_REDIS_MODE=docker` test runs), see the [docker guide](./Dockerfile)
 
 ## Build
 
