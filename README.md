@@ -98,7 +98,7 @@ curl -X POST "http://localhost:26658" \
           "data": "SGVsbG8gQ2VsZXN0aWEh",
           "share_version": 0,
           "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=",
-          "index": null
+          "index": 0
         }
       ],
       {
