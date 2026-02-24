@@ -75,6 +75,15 @@ async fn process_server_supports_all_methods() {
     assert!(included, "blob_included reported false for stored blob");
 
     ctx.client
+        .blobstream_get_data_root_tuple_root(height, height + 1)
+        .await
+        .expect("blobstream_get_data_root_tuple_root failed");
+    ctx.client
+        .blobstream_get_data_root_tuple_inclusion_proof(height, height, height + 1)
+        .await
+        .expect("blobstream_get_data_root_tuple_inclusion_proof failed");
+
+    ctx.client
         .share_get_eds(height, AppVersion::V3)
         .await
         .expect("share_get_eds failed");

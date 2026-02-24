@@ -12,6 +12,8 @@ cargo run
 - Redis running locally or reachable via `REDIS_URL` (install via your package manager or `docker run --rm -p 6379:6379 redis:7`)
 - curl installed (required for CLI-based integration tests; install via your package manager)
 - Docker (optional, only needed for `LOCALESTIA_REDIS_MODE=docker` test runs)
+- Foundry (`forge`, `anvil`) for mock contract deployment and demo
+- Bun (for the demo UI)
 
 ## Build
 
@@ -28,6 +30,42 @@ cargo build --release
 ```bash
 REDIS_URL=redis://127.0.0.1:6379 LISTEN_ADDR=127.0.0.1:26658 cargo run
 ```
+
+## CLI Commands
+
+### Deploy the Mock Blobstream Contract
+
+```bash
+localestia blobstream deploy \
+  --eth-rpc-url http://127.0.0.1:8545 \
+  --private-key 0x...
+```
+
+Optional:
+
+```bash
+  --chain-id 31337
+```
+
+### Run the Full Demo Stack
+
+```bash
+localestia demo --relayer-interval-ms 1000 --ui-port 3030
+```
+
+This command starts Redis, Anvil, Localestia, deploys the mock contract, starts the relayer,
+and serves the UI.
+
+It also auto-submits blobs (and generates headers) every 1500ms by default. To tune or disable:
+
+```bash
+localestia demo --auto-blob-interval-ms 2000
+# set to 0 to disable auto-submission
+localestia demo --auto-blob-interval-ms 0
+```
+
+If `REDIS_URL` is not set, the demo command starts Redis via Docker. If `anvil` is not installed,
+it attempts to run Anvil via Docker.
 
 Defaults if unset:
 
@@ -51,6 +89,36 @@ LOCALESTIA_REDIS_MODE=docker cargo test
 ```
 
 You can also use `LOCALESTIA_REDIS_MODE=auto` to prefer a local `REDIS_URL` if set and fall back to Docker when available.
+
+### Anvil + Foundry (required for blobstream contract test)
+
+The blobstream contract compatibility test deploys the mock Blobstream contract to Anvil and
+verifies proofs on-chain. It requires `anvil` and `forge` to be available.
+
+Preferred (Docker Anvil + local Foundry install):
+
+```bash
+./scripts/setup_anvil.sh
+# then export the values printed by the script
+export ANVIL_RPC_URL=http://127.0.0.1:8545
+export ANVIL_PRIVATE_KEY=0x...
+```
+
+If Docker is not available, the script installs Foundry locally. Tests will spawn a local `anvil`
+binary automatically.
+
+### Demo UI
+
+The demo command runs the UI using Bun + ElysiaJS. You can run it manually:
+
+```bash
+cd ui
+bun install
+CELESTIA_HTTP_URL=http://127.0.0.1:26658 \
+ETH_RPC_URL=http://127.0.0.1:8545 \
+BLOBSTREAM_CONTRACT_ADDRESS=0x... \
+bun src/index.ts
+```
 
 ## Supported RPC Methods
 
@@ -79,6 +147,13 @@ Localestia implements the following JSON-RPC methods:
 | ------ | ----------- | ---------- |
 | `share.GetEDS` | Gets the Extended Data Square at a height | `height: u64` |
 | `share.GetRange` | Gets a range of shares | `height: u64`, `start: u64`, `end: u64` |
+
+### Blobstream Methods
+
+| Method | Description | Parameters |
+| ------ | ----------- | ---------- |
+| `blobstream.GetDataRootTupleRoot` | Computes a merkle root of data root tuples over a block range | `start: u64`, `end: u64` |
+| `blobstream.GetDataRootTupleInclusionProof` | Creates an inclusion proof for a data root tuple within a range | `height: u64`, `start: u64`, `end: u64` |
 
 ## Usage Examples
 
@@ -139,3 +214,45 @@ curl -X POST "http://localhost:26658" \
 ## Docker Setup
 
 See the [Docker Usage Guide](DOCKER.md) for instructions on running Localestia with Docker.
+
+## Blobstream Mock Contract + Relayer
+
+Localestia ships a mock Blobstream contract and a relayer that submits data root tuple roots
+to an EVM chain for local testing.
+
+### Deploy the Mock Contract (Foundry)
+
+Prerequisites:
+
+- Foundry installed (`forge`, `cast`)
+
+From the repo root:
+
+```bash
+cd contracts
+ETH_RPC_URL=http://127.0.0.1:8545 \
+ETH_PRIVATE_KEY=... \
+./scripts/deploy_mock_blobstream.sh
+```
+
+This script deploys and initializes the contract. It prints the deployed address; export it as:
+
+```bash
+export BLOBSTREAM_CONTRACT_ADDRESS=0x...
+```
+
+### Run the Relayer
+
+The relayer submits one header at a time (no batching) as headers appear in Localestia.
+
+```bash
+ETH_RPC_URL=http://127.0.0.1:8545 \
+ETH_PRIVATE_KEY=... \
+BLOBSTREAM_CONTRACT_ADDRESS=0x... \
+CELESTIA_RPC_URL=ws://127.0.0.1:26658 \
+cargo run --bin blobstream_relayer
+```
+
+Optional environment variables:
+
+- `RELAYER_POLL_MS` (default: 1000)

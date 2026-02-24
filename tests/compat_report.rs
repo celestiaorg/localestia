@@ -109,6 +109,19 @@ async fn compatibility_report() {
     }
 
     results.push(record(
+        "blobstream.GetDataRootTupleRoot",
+        ctx.client
+            .blobstream_get_data_root_tuple_root(height, height + 1)
+            .await,
+    ));
+    results.push(record(
+        "blobstream.GetDataRootTupleInclusionProof",
+        ctx.client
+            .blobstream_get_data_root_tuple_inclusion_proof(height, height, height + 1)
+            .await,
+    ));
+
+    results.push(record(
         "share.GetEDS",
         ctx.client.share_get_eds(height, AppVersion::V3).await,
     ));

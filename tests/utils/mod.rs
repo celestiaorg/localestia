@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use celestia_rpc::prelude::*;
-use celestia_rpc::{BlobRpcServer, HeaderRpcServer, ShareRpcServer};
+use celestia_rpc::{BlobRpcServer, BlobstreamRpcServer, HeaderRpcServer, ShareRpcServer};
 use celestia_rpc::{Client, TxConfig};
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
@@ -82,8 +82,11 @@ pub async fn setup() -> TestContext {
         .merge(HeaderRpcServer::into_rpc(rpc_server.clone()))
         .expect("failed to merge header RPC module");
     module
-        .merge(ShareRpcServer::into_rpc(rpc_server))
+        .merge(ShareRpcServer::into_rpc(rpc_server.clone()))
         .expect("failed to merge share RPC module");
+    module
+        .merge(BlobstreamRpcServer::into_rpc(rpc_server))
+        .expect("failed to merge blobstream RPC module");
     let server_handle = server.start(module);
 
     let ws_url = format!("ws://{}", local_addr);
