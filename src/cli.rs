@@ -189,6 +189,7 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<LocalError>> {
         &anvil_rpc_url,
         &contract_address,
         args.ui_port,
+        &redis_url,
     )?;
 
     info!("Demo ready:");
@@ -432,6 +433,7 @@ fn start_ui_server(
     eth_rpc_url: &str,
     contract_address: &str,
     ui_port: u16,
+    rollup_redis_url: &str,
 ) -> Result<Child, Box<LocalError>> {
     let ui_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui");
     if !ui_dir.exists() {
@@ -441,7 +443,8 @@ fn start_ui_server(
     }
 
     let node_modules = ui_dir.join("node_modules");
-    if !node_modules.exists() {
+    let redis_module = node_modules.join("redis");
+    if !node_modules.exists() || !redis_module.exists() {
         let status = Command::new("bun")
             .arg("install")
             .current_dir(&ui_dir)
@@ -458,15 +461,26 @@ fn start_ui_server(
         }
     }
 
-    let child = Command::new("bun")
+    let mut command = Command::new("bun");
+    command
         .arg("src/index.ts")
         .current_dir(ui_dir)
         .env("CELESTIA_HTTP_URL", format!("http://{listen_addr}"))
         .env("ETH_RPC_URL", eth_rpc_url)
         .env("BLOBSTREAM_CONTRACT_ADDRESS", contract_address)
         .env("UI_PORT", ui_port.to_string())
+        .env("ROLLUP_REDIS_URL", rollup_redis_url)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    if let Ok(value) = env::var("ROLLUP_REDIS_KEY") {
+        command.env("ROLLUP_REDIS_KEY", value);
+    }
+    if let Ok(value) = env::var("ROLLUP_METADATA_DIR") {
+        command.env("ROLLUP_METADATA_DIR", value);
+    }
+
+    let child = command
         .spawn()
         .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to start UI server: {e}"))))?;
 

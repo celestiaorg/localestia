@@ -1,0 +1,12 @@
+{
+  "name": "localestia-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun src/index.ts"
+  },
+  "dependencies": {
+    "elysia": "^1.0.0",
+    "redis": "^4.7.0"
+  }
+}

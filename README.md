@@ -67,6 +67,41 @@ localestia demo --auto-blob-interval-ms 0
 If `REDIS_URL` is not set, the demo command starts Redis via Docker. If `anvil` is not installed,
 it attempts to run Anvil via Docker.
 
+### Demo Walkthrough
+
+1) Start the demo:
+
+```bash
+localestia demo --relayer-interval-ms 1000 --ui-port 3030
+```
+
+2) Open the UI:
+
+```bash
+http://127.0.0.1:3030
+```
+
+3) Optional flags:
+
+```bash
+# Change relayer interval (ms)
+localestia demo --relayer-interval-ms 2000
+
+# Disable auto-submitted blobs
+localestia demo --auto-blob-interval-ms 0
+
+# Move the UI port
+localestia demo --ui-port 4040
+```
+
+### Troubleshooting
+
+- `bun: command not found`: install Bun and ensure it is on PATH (`curl -fsSL https://bun.sh/install | bash`).
+- `anvil: command not found`: install Foundry or make sure Docker is running so Anvil can run in a container.
+- `Failed to run bun install`: delete `ui/node_modules` and retry, or run `bun install` manually.
+- `Redis is not reachable`: set `REDIS_URL` or ensure Docker is available so the demo can start Redis.
+- UI is empty: wait a few seconds for auto-submitted blobs to generate headers, or submit a blob manually.
+
 Defaults if unset:
 
 - `REDIS_URL=redis://127.0.0.1:6379`
@@ -119,6 +154,10 @@ ETH_RPC_URL=http://127.0.0.1:8545 \
 BLOBSTREAM_CONTRACT_ADDRESS=0x... \
 bun src/index.ts
 ```
+
+The explorer shows an interactive map with Celestia and Ethereum nodes, a live fiber stream
+between them, and three paginated columns (Celestia blocks, Ethereum blocks, relayed batches).
+Click any item to inspect details with raw JSON.
 
 ## Supported RPC Methods
 
