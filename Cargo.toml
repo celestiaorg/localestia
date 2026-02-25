@@ -7,8 +7,12 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-celestia-rpc = { git = "https://github.com/celestiaorg/lumina.git", rev = "e114c6f" }
-celestia-types = { git = "https://github.com/celestiaorg/lumina.git", rev = "e114c6f" }
+celestia-rpc = { git = "https://github.com/celestiaorg/lumina.git", rev = "6bf264d" }
+celestia-types = { git = "https://github.com/celestiaorg/lumina.git", rev = "6bf264d" }
+celestia-proto = { git = "https://github.com/celestiaorg/lumina.git", rev = "6bf264d", features = ["tonic", "tonic-server"] }
+tonic = { version = "0.13", default-features = false, features = ["codegen", "prost", "transport", "router"] }
+prost = "0.13"
+tendermint-proto = "0.40.3"
 tendermint = "0.40.3"
 ed25519-consensus = "2.1.0"
 rand = "0.8.5"
