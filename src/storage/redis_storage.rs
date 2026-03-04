@@ -1,14 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use celestia_rpc::share::GetRangeResponse;
 use celestia_types::consts::appconsts::SHARE_SIZE;
 use celestia_types::consts::data_availability_header::MIN_EXTENDED_SQUARE_WIDTH;
 use celestia_types::eds::RawExtendedDataSquare;
 use celestia_types::hash::Hash;
 use celestia_types::nmt::NS_SIZE;
-use celestia_types::{nmt::Namespace, Blob, Commitment};
+use celestia_types::nmt::{Namespace, NamespaceProof};
 use celestia_types::{
-    AppVersion, DataAvailabilityHeader, ExtendedDataSquare, ExtendedHeader, InfoByte,
+    AppVersion, DataAvailabilityHeader, ExtendedDataSquare, ExtendedHeader, InfoByte, Share,
+    ShareProof,
 };
+use celestia_types::{Blob, Commitment};
 use hex::ToHex;
 use redis::AsyncCommands;
 use tokio::sync::Mutex;
@@ -18,10 +21,15 @@ use crate::error::LocalError;
 use crate::types::BlobIndexInfo;
 use crate::utils::header_utils::generate_new;
 
+fn is_wrong_type_error(err: &redis::RedisError) -> bool {
+    matches!(err.kind(), redis::ErrorKind::UnexpectedReturnType)
+        || err.to_string().contains("WRONGTYPE")
+}
+
 // Redis-backed storage for blobs
 pub struct RedisStorage {
     client: redis::Client,
-    conn: Mutex<Option<redis::aio::Connection>>,
+    conn: Mutex<Option<redis::aio::MultiplexedConnection>>,
     current_height: Mutex<u64>,
 }
 
@@ -41,7 +49,7 @@ impl RedisStorage {
         if conn_guard.is_none() {
             let conn = self
                 .client
-                .get_async_connection()
+                .get_multiplexed_async_connection()
                 .await
                 .map_err(LocalError::RedisError)?;
             *conn_guard = Some(conn);
@@ -55,17 +63,20 @@ impl RedisStorage {
         Ok(*height_guard)
     }
 
-    async fn get_current_height(&self) -> Result<u64, LocalError> {
+    pub async fn get_current_height(&self) -> Result<u64, LocalError> {
         let height_guard = self.current_height.lock().await;
         Ok(*height_guard)
     }
 
-    /// TODO: currently only 1 namespace and blob per height, support multiple
-    async fn get_namespace_at_height(&self, height: u64) -> Result<Namespace, LocalError> {
+    async fn get_namespaces_at_height(&self, height: u64) -> Result<Vec<Namespace>, LocalError> {
         info!("Getting namespaces at height {}", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -73,16 +84,42 @@ impl RedisStorage {
         let height_namespaces_key = format!("height_namespaces:{}", height);
 
         // Get all namespace hex strings for this height with timeout
-        let ns_hex_value: String = match tokio::time::timeout(
+        let ns_hex_values: Vec<String> = match tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            conn.get(&height_namespaces_key),
+            conn.smembers(&height_namespaces_key),
         )
         .await
         {
-            Ok(result) => result.map_err(|e| {
-                error!("Failed to get namespace members: {}", e);
-                LocalError::RedisError(e)
-            })?,
+            Ok(result) => match result {
+                Ok(values) => values,
+                Err(e) if is_wrong_type_error(&e) => {
+                    let legacy_ns: Option<String> = match tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        conn.get(&height_namespaces_key),
+                    )
+                    .await
+                    {
+                        Ok(result) => result.map_err(|e| {
+                            error!("Failed to get legacy namespace: {}", e);
+                            LocalError::RedisError(e)
+                        })?,
+                        Err(_) => {
+                            error!("Timeout getting legacy namespace");
+                            return Err(LocalError::RedisError(redis::RedisError::from(
+                                std::io::Error::new(
+                                    std::io::ErrorKind::TimedOut,
+                                    "Redis operation timed out when getting legacy namespace",
+                                ),
+                            )));
+                        }
+                    };
+                    legacy_ns.into_iter().collect()
+                }
+                Err(e) => {
+                    error!("Failed to get namespace members: {}", e);
+                    return Err(LocalError::RedisError(e));
+                }
+            },
             Err(_) => {
                 error!("Timeout getting namespace members");
                 return Err(LocalError::RedisError(redis::RedisError::from(
@@ -94,21 +131,44 @@ impl RedisStorage {
             }
         };
 
-        info!("Got Namespace: {:?}", ns_hex_value);
+        info!("Got namespaces: {:?}", ns_hex_values);
 
-        // Convert hex strings back to Namespace objects
-        let ns_bytes = hex::decode(ns_hex_value).unwrap();
-        let namespace = Namespace::from_raw(&ns_bytes).unwrap();
+        let mut namespaces = Vec::new();
+        let mut seen = HashSet::new();
 
-        Ok(namespace)
+        for ns_hex in ns_hex_values {
+            if !seen.insert(ns_hex.clone()) {
+                continue;
+            }
+            let ns_bytes = hex::decode(&ns_hex)
+                .map_err(|e| LocalError::InvalidNamespace(format!("{}: {}", ns_hex, e)))?;
+            let namespace = Namespace::from_raw(&ns_bytes)
+                .map_err(|e| LocalError::InvalidNamespace(format!("{}: {}", ns_hex, e)))?;
+            namespaces.push(namespace);
+        }
+
+        Ok(namespaces)
     }
 
-    pub async fn store_blob(&self, blob: &Blob) -> Result<u64, LocalError> {
-        info!("Starting to store blob...");
+    pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<u64, LocalError> {
+        if blobs.is_empty() {
+            return Ok(0);
+        }
 
-        // Get the current height or increment for a new submission
+        info!("Starting to store {} blobs...", blobs.len());
+
         let height = self.increment_height().await?;
         info!("Assigned height: {}", height);
+
+        for blob in blobs {
+            self.store_blob_at_height(height, blob).await?;
+        }
+
+        Ok(height)
+    }
+
+    async fn store_blob_at_height(&self, height: u64, blob: &Blob) -> Result<(), LocalError> {
+        info!("Storing blob at height {}", height);
 
         // Generate keys for storage
         let ns_hex: String = blob.namespace.encode_hex();
@@ -126,6 +186,11 @@ impl RedisStorage {
         };
 
         let commitment_hex = hex::encode(&commitment);
+        // Key schema:
+        // blob:<height>:<namespace_hex>:<commitment_hex>
+        // namespace:<height>:<namespace_hex> -> set of blob keys
+        // commitment:<height>:<namespace_hex>:<commitment_hex> -> blob key
+        // height_namespaces:<height> -> set of namespace hex strings
         let blob_key = format!("blob:{}:{}:{}", height, ns_hex, commitment_hex);
         let ns_key = format!("namespace:{}:{}", height, ns_hex);
         let commitment_key = format!("commitment:{}:{}:{}", height, ns_hex, commitment_hex);
@@ -135,7 +200,11 @@ impl RedisStorage {
         let serialized = serde_json::to_string(blob).map_err(LocalError::SerializationError)?;
 
         // Get a fresh Redis connection for all operations
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -212,7 +281,7 @@ impl RedisStorage {
         // Track this namespace at this height with timeout
         match tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            conn.set::<_, _, ()>(&height_namespaces_key, &ns_hex),
+            conn.sadd::<_, _, ()>(&height_namespaces_key, &ns_hex),
         )
         .await
         {
@@ -233,7 +302,7 @@ impl RedisStorage {
         info!("Tracked namespace");
 
         info!("Successfully stored blob at height {}", height);
-        Ok(height)
+        Ok(())
     }
 
     pub async fn get_blob(
@@ -252,7 +321,11 @@ impl RedisStorage {
         self.get_eds_at_height(height).await?;
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -336,28 +409,152 @@ impl RedisStorage {
         Ok(blob)
     }
 
+    pub async fn get_blob_proof(
+        &self,
+        height: u64,
+        namespace: &Namespace,
+        commitment: &Commitment,
+    ) -> Result<Vec<NamespaceProof>, LocalError> {
+        let blob = self.get_blob(height, namespace, commitment).await?;
+        let eds = self.get_eds_at_height(height).await?;
+
+        let shares = blob
+            .to_shares()
+            .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+        if shares.is_empty() {
+            return Err(LocalError::TransactionError(
+                "Blob has no shares".to_string(),
+            ));
+        }
+
+        let start_idx = blob.index.ok_or(LocalError::TransactionError(
+            "Blob index missing".to_string(),
+        ))?;
+        let start_idx = usize::try_from(start_idx)
+            .map_err(|_| LocalError::TransactionError("Blob index out of range".to_string()))?;
+        let end_idx = start_idx + shares.len().saturating_sub(1);
+
+        let width = usize::from(eds.square_width());
+        if width == 0 {
+            return Err(LocalError::TransactionError(
+                "EDS width is zero".to_string(),
+            ));
+        }
+
+        let start_row = start_idx / width;
+        let end_row = end_idx / width;
+
+        let mut proofs = Vec::new();
+        for row in start_row..=end_row {
+            let row = u16::try_from(row)
+                .map_err(|_| LocalError::TransactionError("Row index out of range".to_string()))?;
+            let mut row_nmt = eds
+                .row_nmt(row)
+                .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+            let proof = row_nmt.get_namespace_proof((*namespace).into());
+            proofs.push(proof.into());
+        }
+
+        Ok(proofs)
+    }
+
+    pub async fn blob_included(
+        &self,
+        height: u64,
+        namespace: &Namespace,
+        proof: &NamespaceProof,
+        commitment: &Commitment,
+    ) -> Result<bool, LocalError> {
+        let blob = match self.get_blob(height, namespace, commitment).await {
+            Ok(blob) => blob,
+            Err(LocalError::BlobNotFound) => return Ok(false),
+            Err(err) => return Err(err),
+        };
+
+        let eds = self.get_eds_at_height(height).await?;
+        let dah = DataAvailabilityHeader::from_eds(&eds);
+
+        let shares = blob
+            .to_shares()
+            .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+        if shares.is_empty() {
+            return Ok(false);
+        }
+
+        let start_idx = blob.index.ok_or(LocalError::TransactionError(
+            "Blob index missing".to_string(),
+        ))?;
+        let start_idx = usize::try_from(start_idx)
+            .map_err(|_| LocalError::TransactionError("Blob index out of range".to_string()))?;
+        let end_idx = start_idx + shares.len().saturating_sub(1);
+
+        let width = usize::from(eds.square_width());
+        if width == 0 {
+            return Err(LocalError::TransactionError(
+                "EDS width is zero".to_string(),
+            ));
+        }
+
+        let start_row = start_idx / width;
+        let end_row = end_idx / width;
+
+        for row in start_row..=end_row {
+            let row = u16::try_from(row)
+                .map_err(|_| LocalError::TransactionError("Row index out of range".to_string()))?;
+            let root = dah
+                .row_root(row)
+                .ok_or_else(|| LocalError::TransactionError("Row root missing".to_string()))?;
+
+            let mut row_shares = Vec::new();
+            for col in 0..eds.square_width() {
+                let share = eds
+                    .share(row, col)
+                    .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+                if share.namespace() == *namespace {
+                    row_shares.push(share.clone());
+                }
+            }
+
+            if proof
+                .verify_complete_namespace(&root, &row_shares, (*namespace).into())
+                .is_ok()
+            {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     pub async fn get_all_blobs(
         &self,
         height: u64,
-        namespace: Namespace,
+        namespaces: Vec<Namespace>,
     ) -> Result<Vec<Blob>, LocalError> {
         info!("Getting all blobs at height {} ", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
 
         let mut all_blobs = Vec::new();
 
-        let ns_hex = hex::encode(namespace.as_bytes());
-        let ns_key = format!("namespace:{}:{}", height, ns_hex);
+        for namespace in namespaces {
+            let ns_hex = hex::encode(namespace.as_bytes());
+            let ns_key = format!("namespace:{}:{}", height, ns_hex);
 
-        // Get all blob keys for this namespace with timeout
-        let blob_keys: Vec<String> =
-            match tokio::time::timeout(std::time::Duration::from_secs(5), conn.smembers(&ns_key))
-                .await
+            // Get all blob keys for this namespace with timeout
+            let blob_keys: Vec<String> = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                conn.smembers(&ns_key),
+            )
+            .await
             {
                 Ok(result) => result.map_err(|e| {
                     error!("Failed to get blob keys: {}", e);
@@ -374,11 +571,13 @@ impl RedisStorage {
                 }
             };
 
-        for blob_key in &blob_keys {
-            // Get blob data with timeout
-            let blob_data: Option<String> =
-                match tokio::time::timeout(std::time::Duration::from_secs(5), conn.get(&blob_key))
-                    .await
+            for blob_key in &blob_keys {
+                // Get blob data with timeout
+                let blob_data: Option<String> = match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    conn.get(&blob_key),
+                )
+                .await
                 {
                     Ok(result) => result.map_err(|e| {
                         error!("Failed to get blob data: {}", e);
@@ -395,24 +594,25 @@ impl RedisStorage {
                     }
                 };
 
-            for blob_key in &blob_keys {
-                info!("Processing blob key: {}", blob_key);
-            }
+                for blob_key in &blob_keys {
+                    info!("Processing blob key: {}", blob_key);
+                }
 
-            if let Some(blob_data) = blob_data {
-                match serde_json::from_str::<Blob>(&blob_data) {
-                    Ok(blob) => {
-                        info!(
-                            "Deserialized blob from key {}: index={:?}, namespace={}",
-                            blob_key,
-                            blob.index,
-                            hex::encode(blob.namespace.as_bytes())
-                        );
-                        all_blobs.push(blob);
-                    }
-                    Err(e) => {
-                        error!("Failed to deserialize blob: {}", e);
-                        return Err(LocalError::SerializationError(e));
+                if let Some(blob_data) = blob_data {
+                    match serde_json::from_str::<Blob>(&blob_data) {
+                        Ok(blob) => {
+                            info!(
+                                "Deserialized blob from key {}: index={:?}, namespace={}",
+                                blob_key,
+                                blob.index,
+                                hex::encode(blob.namespace.as_bytes())
+                            );
+                            all_blobs.push(blob);
+                        }
+                        Err(e) => {
+                            error!("Failed to deserialize blob: {}", e);
+                            return Err(LocalError::SerializationError(e));
+                        }
                     }
                 }
             }
@@ -423,10 +623,14 @@ impl RedisStorage {
 
     pub async fn store_header(&self, header: &ExtendedHeader) -> Result<u64, LocalError> {
         let height = header.height();
-        info!("Storing header at height {}", height.value());
+        info!("Storing header at height {}", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -487,11 +691,11 @@ impl RedisStorage {
 
         // Update current height if this is higher
         let mut height_guard = self.current_height.lock().await;
-        if height.value() > *height_guard {
-            *height_guard = height.value();
+        if height > *height_guard {
+            *height_guard = height;
         }
 
-        Ok(height.value())
+        Ok(height)
     }
 
     pub async fn get_header_by_height(&self, height: u64) -> Result<ExtendedHeader, LocalError> {
@@ -508,7 +712,11 @@ impl RedisStorage {
         }
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -545,7 +753,11 @@ impl RedisStorage {
         info!("Getting header by hash {}", hex::encode(hash.as_bytes()));
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -619,12 +831,21 @@ impl RedisStorage {
 
         // Verify headers are adjacent to each other
         for i in 1..headers.len() {
-            if headers[i].height().value() != headers[i - 1].height().value() + 1 {
+            if headers[i].height() != headers[i - 1].height() + 1 {
                 return Err(LocalError::InvalidHeaderRange);
             }
         }
 
         Ok(headers)
+    }
+
+    pub async fn get_latest_head(&self) -> Result<ExtendedHeader, LocalError> {
+        let height = self.get_current_height().await.map_err(|e| e)?;
+
+        match self.get_header_by_height(height).await {
+            Ok(header) => Ok(header),
+            Err(error) => Err(error),
+        }
     }
 
     // Method to get the full Extended Data Square for a height
@@ -642,7 +863,11 @@ impl RedisStorage {
         }
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -659,10 +884,10 @@ impl RedisStorage {
         }
 
         // Get all namespaces used at this height
-        let namespace = self.get_namespace_at_height(height).await?;
+        let namespaces = self.get_namespaces_at_height(height).await?;
 
         // Get all blobs for these namespaces
-        let all_blobs = self.get_all_blobs(height, namespace).await?;
+        let all_blobs = self.get_all_blobs(height, namespaces).await?;
 
         // Collect all shares from all blobs and track indexes
         let mut all_shares: Vec<Vec<u8>> = Vec::new();
@@ -893,7 +1118,7 @@ impl RedisStorage {
         height: u64,
         start: u64,
         end: u64,
-    ) -> Result<crate::types::GetRangeResponse, LocalError> {
+    ) -> Result<GetRangeResponse, LocalError> {
         if start > end {
             return Err(LocalError::TransactionError(
                 "Invalid range: start > end".to_string(),
@@ -902,28 +1127,100 @@ impl RedisStorage {
 
         // Get the full EDS first
         let eds = self.get_eds_at_height(height).await?;
+        let square_width = usize::from(eds.square_width());
+        if square_width == 0 {
+            return Err(LocalError::TransactionError(
+                "EDS width is zero".to_string(),
+            ));
+        }
+        let ods_width = square_width / 2;
+        let total_ods_shares = ods_width * ods_width;
 
-        let eds_data = eds.data_square();
+        let start_idx = start as usize;
+        let end_idx = end as usize;
 
-        // Extract the requested range
-        let shares = if start as usize >= eds_data.len() {
-            Vec::new() // Return empty if start is out of range
-        } else {
-            let end_idx = std::cmp::min(end as usize + 1, eds_data.len());
-            // Map each Share to Vec<u8>
-            eds_data[start as usize..end_idx]
-                .iter()
-                .map(|share| share.to_vec())
-                .collect()
+        if start_idx >= total_ods_shares {
+            return Err(LocalError::TransactionError(
+                "Start index out of range".to_string(),
+            ));
+        }
+
+        let end_idx = std::cmp::min(end_idx, total_ods_shares - 1);
+
+        let start_row = start_idx / ods_width;
+        let end_row = end_idx / ods_width;
+
+        let mut shares: Vec<Share> = Vec::new();
+        for row in start_row..=end_row {
+            let col_start = if row == start_row {
+                start_idx % ods_width
+            } else {
+                0
+            };
+            let col_end = if row == end_row {
+                end_idx % ods_width
+            } else {
+                ods_width - 1
+            };
+
+            for col in col_start..=col_end {
+                let share = eds
+                    .share(row as u16, col as u16)
+                    .map_err(|e| LocalError::TransactionError(e.to_string()))?
+                    .clone();
+                shares.push(share);
+            }
+        }
+
+        if shares.is_empty() {
+            return Err(LocalError::TransactionError(
+                "No shares found in range".to_string(),
+            ));
+        }
+
+        let namespace_id = shares[0].namespace();
+        let dah = DataAvailabilityHeader::from_eds(&eds);
+        let row_proof = dah
+            .row_proof(start_row as u16..=end_row as u16)
+            .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+
+        let mut share_proofs = Vec::new();
+        for row in start_row..=end_row {
+            let mut row_nmt = eds
+                .row_nmt(row as u16)
+                .map_err(|e| LocalError::TransactionError(e.to_string()))?;
+            let proof = row_nmt.get_namespace_proof(namespace_id.into());
+            share_proofs.push(proof.into());
+        }
+
+        let mut data = Vec::with_capacity(shares.len());
+        for share in &shares {
+            let mut buf = [0u8; SHARE_SIZE];
+            buf.copy_from_slice(share.as_ref());
+            data.push(buf);
+        }
+
+        let response = GetRangeResponse {
+            shares,
+            proof: ShareProof {
+                data,
+                namespace_id,
+                share_proofs,
+                row_proof,
+            },
         };
 
-        Ok(crate::types::GetRangeResponse { shares })
+        Ok(response)
     }
 
     pub async fn clear_database(&self) -> Result<(), LocalError> {
         info!("Clearing Redis database");
 
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
