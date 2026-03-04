@@ -75,13 +75,13 @@ it attempts to run Anvil via Docker.
 localestia demo --relayer-interval-ms 1000 --ui-port 3030
 ```
 
-2) Open the UI:
+1) Open the UI:
 
 ```bash
 http://127.0.0.1:3030
 ```
 
-3) Optional flags:
+1) Optional flags:
 
 ```bash
 # Change relayer interval (ms)
@@ -212,7 +212,7 @@ curl -X POST "http://localhost:26658" \
           "data": "SGVsbG8gQ2VsZXN0aWEh",
           "share_version": 0,
           "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=",
-          "index": null
+          "index": 0
         }
       ],
       {

@@ -22,13 +22,14 @@ use crate::types::BlobIndexInfo;
 use crate::utils::header_utils::generate_new;
 
 fn is_wrong_type_error(err: &redis::RedisError) -> bool {
-    matches!(err.kind(), redis::ErrorKind::TypeError) || err.to_string().contains("WRONGTYPE")
+    matches!(err.kind(), redis::ErrorKind::UnexpectedReturnType)
+        || err.to_string().contains("WRONGTYPE")
 }
 
 // Redis-backed storage for blobs
 pub struct RedisStorage {
     client: redis::Client,
-    conn: Mutex<Option<redis::aio::Connection>>,
+    conn: Mutex<Option<redis::aio::MultiplexedConnection>>,
     current_height: Mutex<u64>,
 }
 
@@ -48,7 +49,7 @@ impl RedisStorage {
         if conn_guard.is_none() {
             let conn = self
                 .client
-                .get_async_connection()
+                .get_multiplexed_async_connection()
                 .await
                 .map_err(LocalError::RedisError)?;
             *conn_guard = Some(conn);
@@ -71,7 +72,11 @@ impl RedisStorage {
         info!("Getting namespaces at height {}", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -195,7 +200,11 @@ impl RedisStorage {
         let serialized = serde_json::to_string(blob).map_err(LocalError::SerializationError)?;
 
         // Get a fresh Redis connection for all operations
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -312,7 +321,11 @@ impl RedisStorage {
         self.get_eds_at_height(height).await?;
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -521,7 +534,11 @@ impl RedisStorage {
         info!("Getting all blobs at height {} ", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -609,7 +626,11 @@ impl RedisStorage {
         info!("Storing header at height {}", height);
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -691,7 +712,11 @@ impl RedisStorage {
         }
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -728,7 +753,11 @@ impl RedisStorage {
         info!("Getting header by hash {}", hex::encode(hash.as_bytes()));
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -834,7 +863,11 @@ impl RedisStorage {
         }
 
         // Get a fresh connection
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;
@@ -1183,7 +1216,11 @@ impl RedisStorage {
     pub async fn clear_database(&self) -> Result<(), LocalError> {
         info!("Clearing Redis database");
 
-        let mut conn = self.client.get_async_connection().await.map_err(|e| {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             LocalError::RedisError(e)
         })?;

@@ -8,7 +8,7 @@ use celestia_types::{AppVersion, Blob};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee_core::client::Error as RpcError;
 use jsonrpsee_types::error::{INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE};
-use localestia::rpc::LocalestiaServer;
+use localestia::rpc::{LocalestiaServer, ShareRpcServer as LocalShareRpcServer};
 use localestia::storage::RedisStorage;
 use once_cell::sync::Lazy;
 use std::env;
@@ -261,7 +261,11 @@ fn target_profile_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"));
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let profile = if profile == "release" { "release" } else { "debug" };
+    let profile = if profile == "release" {
+        "release"
+    } else {
+        "debug"
+    };
     target_dir.join(profile)
 }
 
@@ -455,7 +459,7 @@ async fn wait_for_redis(redis_url: &str, mode: RedisMode) {
 
     loop {
         match redis::Client::open(redis_url) {
-            Ok(client) => match client.get_async_connection().await {
+            Ok(client) => match client.get_multiplexed_async_connection().await {
                 Ok(mut conn) => {
                     let pong: redis::RedisResult<String> =
                         redis::cmd("PING").query_async(&mut conn).await;
