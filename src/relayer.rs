@@ -30,7 +30,8 @@ pub async fn run_from_env() -> Result<()> {
     let celestia_ws_url =
         std::env::var("CELESTIA_RPC_URL").unwrap_or_else(|_| "ws://127.0.0.1:26658".to_string());
     let eth_rpc_url = std::env::var("ETH_RPC_URL").context("ETH_RPC_URL is required")?;
-    let eth_private_key = std::env::var("ETH_PRIVATE_KEY").context("ETH_PRIVATE_KEY is required")?;
+    let eth_private_key =
+        std::env::var("ETH_PRIVATE_KEY").context("ETH_PRIVATE_KEY is required")?;
     let contract_address = std::env::var("BLOBSTREAM_CONTRACT_ADDRESS")
         .context("BLOBSTREAM_CONTRACT_ADDRESS is required")?;
     let poll_ms: u64 = std::env::var("RELAYER_POLL_MS")
@@ -61,7 +62,10 @@ pub async fn run(config: RelayerConfig) -> Result<()> {
     }
 }
 
-pub async fn run_with_shutdown(config: RelayerConfig, mut shutdown: watch::Receiver<bool>) -> Result<()> {
+pub async fn run_with_shutdown(
+    config: RelayerConfig,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let local_client = Client::new(&config.celestia_ws_url, None, None, None)
@@ -108,7 +112,10 @@ pub async fn run_with_shutdown(config: RelayerConfig, mut shutdown: watch::Recei
     Ok(())
 }
 
-async fn relay_once<M: Middleware + 'static>(local_client: &Client, contract: &MockBlobstream<M>) -> Result<()> {
+async fn relay_once<M: Middleware + 'static>(
+    local_client: &Client,
+    contract: &MockBlobstream<M>,
+) -> Result<()> {
     let local_head = match local_client.header_local_head().await {
         Ok(header) => header.height(),
         Err(err) => {
@@ -129,7 +136,11 @@ async fn relay_once<M: Middleware + 'static>(local_client: &Client, contract: &M
         }
     };
 
-    let mut next_height = if contract_latest == 0 { 1 } else { contract_latest };
+    let mut next_height = if contract_latest == 0 {
+        1
+    } else {
+        contract_latest
+    };
 
     if next_height > local_head {
         return Ok(());
@@ -153,7 +164,10 @@ async fn relay_once<M: Middleware + 'static>(local_client: &Client, contract: &M
             .await
             .context("failed to fetch transaction receipt")?;
         if let Some(receipt) = receipt {
-            info!("relayed height {next_height} in tx {:#x}", receipt.transaction_hash);
+            info!(
+                "relayed height {next_height} in tx {:#x}",
+                receipt.transaction_hash
+            );
         } else {
             warn!("relayed height {next_height} but receipt missing");
         }

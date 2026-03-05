@@ -64,7 +64,11 @@ async fn blobstream_proof_verifies_on_mock_contract() {
     let ctx = setup().await;
     let namespace = make_namespace(51);
 
-    let height = submit_blob(&ctx.client, &make_blob(namespace, b"contract proof".to_vec())).await;
+    let height = submit_blob(
+        &ctx.client,
+        &make_blob(namespace, b"contract proof".to_vec()),
+    )
+    .await;
 
     let (anvil, contract) = deploy_mockstream_contract().await;
 
@@ -100,7 +104,11 @@ async fn blobstream_proof_verifies_on_mock_contract() {
         .hash();
 
     let tuple = (U256::from(height), hash_to_h256(data_root));
-    let side_nodes: Vec<H256> = proof.aunts.iter().map(|hash| H256::from_slice(hash)).collect();
+    let side_nodes: Vec<H256> = proof
+        .aunts
+        .iter()
+        .map(|hash| H256::from_slice(hash))
+        .collect();
     let proof_tuple = (
         side_nodes,
         U256::from(proof.index as u64),
@@ -147,8 +155,10 @@ fn ensure_forge_build() {
     });
 }
 
-async fn deploy_mockstream_contract(
-) -> (Option<AnvilInstance>, Contract<SignerMiddleware<Provider<ethers::providers::Http>, LocalWallet>>) {
+async fn deploy_mockstream_contract() -> (
+    Option<AnvilInstance>,
+    Contract<SignerMiddleware<Provider<ethers::providers::Http>, LocalWallet>>,
+) {
     ensure_forge_build();
 
     let (anvil, client) = anvil_client().await;
@@ -174,13 +184,15 @@ async fn deploy_mockstream_contract(
     (anvil, contract)
 }
 
-async fn anvil_client(
-) -> (Option<AnvilInstance>, Arc<SignerMiddleware<Provider<ethers::providers::Http>, LocalWallet>>) {
+async fn anvil_client() -> (
+    Option<AnvilInstance>,
+    Arc<SignerMiddleware<Provider<ethers::providers::Http>, LocalWallet>>,
+) {
     if let Ok(rpc_url) = env::var("ANVIL_RPC_URL") {
         let private_key = env::var("ANVIL_PRIVATE_KEY")
             .expect("ANVIL_PRIVATE_KEY is required when ANVIL_RPC_URL is set");
-        let provider = Provider::try_from(rpc_url)
-            .expect("failed to create provider from ANVIL_RPC_URL");
+        let provider =
+            Provider::try_from(rpc_url).expect("failed to create provider from ANVIL_RPC_URL");
         let chain_id = provider
             .get_chainid()
             .await
@@ -219,8 +231,8 @@ fn load_mockstream_artifact() -> (Abi, Bytes) {
         panic!("forge artifact bytecode is empty");
     }
     let bytecode = bytecode.strip_prefix("0x").unwrap_or(&bytecode);
-    let bytecode = hex::decode(bytecode)
-        .unwrap_or_else(|err| panic!("failed to decode bytecode hex: {err}"));
+    let bytecode =
+        hex::decode(bytecode).unwrap_or_else(|err| panic!("failed to decode bytecode hex: {err}"));
 
     (abi, Bytes::from(bytecode))
 }

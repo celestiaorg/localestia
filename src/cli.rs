@@ -23,12 +23,15 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::error::LocalError;
-use localestia::relayer::{self, RelayerConfig};
 use crate::rpc::LocalestiaServer;
 use crate::storage::RedisStorage;
-use celestia_rpc::{BlobClient, BlobRpcServer, BlobstreamRpcServer, Client, HeaderRpcServer, ShareRpcServer, TxConfig};
+use celestia_rpc::{
+    BlobClient, BlobRpcServer, BlobstreamRpcServer, Client, HeaderRpcServer, ShareRpcServer,
+    TxConfig,
+};
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
+use localestia::relayer::{self, RelayerConfig};
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:26658";
 const DEFAULT_REDIS_URL: &str = "redis://127.0.0.1:6379";
@@ -39,7 +42,11 @@ const DEFAULT_ANVIL_IMAGE: &str = "ghcr.io/foundry-rs/foundry:latest";
 const DEFAULT_ANVIL_MNEMONIC: &str = "test test test test test test test test test test test junk";
 
 #[derive(Parser)]
-#[command(name = "localestia", version, about = "Local Celestia JSON-RPC emulator")]
+#[command(
+    name = "localestia",
+    version,
+    about = "Local Celestia JSON-RPC emulator"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -104,9 +111,9 @@ pub async fn run() -> Result<(), Box<LocalError>> {
     let cli = Cli::parse();
     match cli.command {
         None => run_server_from_env().await,
-        Some(Commands::Blobstream { command: BlobstreamCommands::Deploy(args) }) => {
-            deploy_command(args).await
-        }
+        Some(Commands::Blobstream {
+            command: BlobstreamCommands::Deploy(args),
+        }) => deploy_command(args).await,
         Some(Commands::Demo(args)) => run_demo(args).await,
     }
 }
@@ -160,7 +167,12 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<LocalError>> {
 
     let server_handle = start_rpc_server(&redis_url, &args.listen_addr).await?;
 
-    let contract_address = deploy_mockstream(&anvil_rpc_url, &anvil_private_key, Some(anvil_guard.chain_id)).await?;
+    let contract_address = deploy_mockstream(
+        &anvil_rpc_url,
+        &anvil_private_key,
+        Some(anvil_guard.chain_id),
+    )
+    .await?;
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let relayer_handle = tokio::spawn(relayer::run_with_shutdown(
@@ -280,7 +292,10 @@ async fn auto_blob_loop(ws_url: String, interval_ms: u64, mut shutdown: watch::R
     }
 }
 
-async fn start_rpc_server(redis_url: &str, listen_addr: &str) -> Result<ServerHandle, Box<LocalError>> {
+async fn start_rpc_server(
+    redis_url: &str,
+    listen_addr: &str,
+) -> Result<ServerHandle, Box<LocalError>> {
     let addr: SocketAddr = listen_addr.parse().map_err(|e| {
         Box::new(LocalError::TransactionError(format!(
             "Failed to parse address: {e}"
@@ -313,16 +328,30 @@ async fn start_rpc_server(redis_url: &str, listen_addr: &str) -> Result<ServerHa
     let mut module = BlobRpcServer::into_rpc(rpc_server.clone());
     module
         .merge(HeaderRpcServer::into_rpc(rpc_server.clone()))
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to merge header RPC: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to merge header RPC: {e}"
+            )))
+        })?;
     module
         .merge(ShareRpcServer::into_rpc(rpc_server.clone()))
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to merge share RPC: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to merge share RPC: {e}"
+            )))
+        })?;
     module
         .merge(BlobstreamRpcServer::into_rpc(rpc_server))
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to merge blobstream RPC: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to merge blobstream RPC: {e}"
+            )))
+        })?;
 
     let server = ServerBuilder::default().build(addr).await.map_err(|e| {
-        Box::new(LocalError::TransactionError(format!("Failed to build server: {e}")))
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to build server: {e}"
+        )))
     })?;
 
     Ok(server.start(module))
@@ -337,36 +366,64 @@ async fn deploy_mockstream(
     let (abi, bytecode) = load_mockstream_artifact()?;
 
     let provider = Provider::<Http>::try_from(eth_rpc_url).map_err(|e| {
-        Box::new(LocalError::TransactionError(format!("Failed to connect to ETH RPC: {e}")))
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to connect to ETH RPC: {e}"
+        )))
     })?;
     let chain_id = match chain_id {
         Some(chain_id) => chain_id,
-        None => provider.get_chainid().await.map_err(|e| {
-            Box::new(LocalError::TransactionError(format!("Failed to fetch chain id: {e}")))
-        })?.as_u64(),
+        None => provider
+            .get_chainid()
+            .await
+            .map_err(|e| {
+                Box::new(LocalError::TransactionError(format!(
+                    "Failed to fetch chain id: {e}"
+                )))
+            })?
+            .as_u64(),
     };
 
-    let wallet: LocalWallet = private_key.parse::<LocalWallet>().map_err(|e| {
-        Box::new(LocalError::TransactionError(format!("Failed to parse private key: {e}")))
-    })?.with_chain_id(chain_id);
+    let wallet: LocalWallet = private_key
+        .parse::<LocalWallet>()
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to parse private key: {e}"
+            )))
+        })?
+        .with_chain_id(chain_id);
     let client = Arc::new(SignerMiddleware::new(provider, wallet));
     let factory = ContractFactory::new(abi, bytecode, client);
 
     let contract = factory
         .deploy(())
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to deploy contract: {e}"))))?
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to deploy contract: {e}"
+            )))
+        })?
         .send()
         .await
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to send deploy tx: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to send deploy tx: {e}"
+            )))
+        })?;
 
-    let init_call = contract
-        .method::<_, ()>("initialize", 0u64)
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to build initialize call: {e}"))))?;
-    let init = init_call
-        .send()
-        .await
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to initialize contract: {e}"))))?;
-    init.await.map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to confirm initialize: {e}"))))?;
+    let init_call = contract.method::<_, ()>("initialize", 0u64).map_err(|e| {
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to build initialize call: {e}"
+        )))
+    })?;
+    let init = init_call.send().await.map_err(|e| {
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to initialize contract: {e}"
+        )))
+    })?;
+    init.await.map_err(|e| {
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to confirm initialize: {e}"
+        )))
+    })?;
 
     Ok(format!("0x{}", hex::encode(contract.address().as_bytes())))
 }
@@ -384,7 +441,11 @@ fn ensure_forge_artifact() -> Result<(), Box<LocalError>> {
         .arg("build")
         .current_dir(contracts_dir())
         .status()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to run forge build: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to run forge build: {e}"
+            )))
+        })?;
 
     if !status.success() {
         return Err(Box::new(LocalError::TransactionError(format!(
@@ -405,8 +466,8 @@ fn load_mockstream_artifact() -> Result<(Abi, Bytes), Box<LocalError>> {
             "Failed to read {artifact_path:?}: {e}"
         )))
     })?;
-    let artifact: ForgeArtifact = serde_json::from_slice(&bytes)
-        .map_err(|e| Box::new(LocalError::SerializationError(e)))?;
+    let artifact: ForgeArtifact =
+        serde_json::from_slice(&bytes).map_err(|e| Box::new(LocalError::SerializationError(e)))?;
     let abi: Abi = serde_json::from_value(artifact.abi)
         .map_err(|e| Box::new(LocalError::SerializationError(e)))?;
 
@@ -418,7 +479,9 @@ fn load_mockstream_artifact() -> Result<(Abi, Bytes), Box<LocalError>> {
     }
     let object = object.strip_prefix("0x").unwrap_or(&object);
     let bytes = hex::decode(object).map_err(|e| {
-        Box::new(LocalError::TransactionError(format!("Invalid bytecode hex: {e}")))
+        Box::new(LocalError::TransactionError(format!(
+            "Invalid bytecode hex: {e}"
+        )))
     })?;
 
     Ok((abi, Bytes::from(bytes)))
@@ -480,9 +543,11 @@ fn start_ui_server(
         command.env("ROLLUP_METADATA_DIR", value);
     }
 
-    let child = command
-        .spawn()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to start UI server: {e}"))))?;
+    let child = command.spawn().map_err(|e| {
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to start UI server: {e}"
+        )))
+    })?;
 
     Ok(child)
 }
@@ -520,7 +585,11 @@ fn start_redis_docker() -> Result<RedisGuard, Box<LocalError>> {
         .arg(&name)
         .arg(DEFAULT_REDIS_IMAGE)
         .output()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to start Redis docker: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to start Redis docker: {e}"
+            )))
+        })?;
 
     if !output.status.success() {
         return Err(Box::new(LocalError::TransactionError(format!(
@@ -586,10 +655,16 @@ fn start_anvil_local(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<LocalE
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to start anvil: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to start anvil: {e}"
+            )))
+        })?;
 
     let stdout = child.stdout.take().ok_or_else(|| {
-        Box::new(LocalError::TransactionError("Failed to capture anvil stdout".to_string()))
+        Box::new(LocalError::TransactionError(
+            "Failed to capture anvil stdout".to_string(),
+        ))
     })?;
     let reader = BufReader::new(stdout);
     let mut private_key = None;
@@ -598,7 +673,11 @@ fn start_anvil_local(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<LocalE
 
     let start = Instant::now();
     for line in reader.lines() {
-        let line = line.map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to read anvil output: {e}"))))?;
+        let line = line.map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to read anvil output: {e}"
+            )))
+        })?;
         if line.contains("Listening on") {
             break;
         }
@@ -613,7 +692,13 @@ fn start_anvil_local(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<LocalE
         }
         if let Some(idx) = line.find("Chain ID:") {
             let rest = &line[idx + "Chain ID:".len()..];
-            if let Ok(value) = rest.trim().split_whitespace().next().unwrap_or("").parse::<u64>() {
+            if let Ok(value) = rest
+                .trim()
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .parse::<u64>()
+            {
                 chain_id = Some(value);
             }
         }
@@ -626,7 +711,9 @@ fn start_anvil_local(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<LocalE
     }
 
     let private_key = private_key.ok_or_else(|| {
-        Box::new(LocalError::TransactionError("Failed to parse anvil private key".to_string()))
+        Box::new(LocalError::TransactionError(
+            "Failed to parse anvil private key".to_string(),
+        ))
     })?;
     let chain_id = chain_id.unwrap_or(31337);
 
@@ -657,7 +744,11 @@ fn start_anvil_docker(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<Local
         .arg("--mnemonic")
         .arg(mnemonic)
         .output()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to start anvil docker: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to start anvil docker: {e}"
+            )))
+        })?;
 
     if !output.status.success() {
         return Err(Box::new(LocalError::TransactionError(format!(
@@ -673,7 +764,11 @@ fn start_anvil_docker(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<Local
             .arg("logs")
             .arg(&name)
             .output()
-            .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to read anvil logs: {e}"))))?;
+            .map_err(|e| {
+                Box::new(LocalError::TransactionError(format!(
+                    "Failed to read anvil logs: {e}"
+                )))
+            })?;
         let logs = String::from_utf8_lossy(&logs.stdout);
         if logs.contains("Listening on") {
             for line in logs.lines() {
@@ -698,7 +793,9 @@ fn start_anvil_docker(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<Local
     }
 
     let private_key = private_key.ok_or_else(|| {
-        Box::new(LocalError::TransactionError("Failed to parse anvil docker private key".to_string()))
+        Box::new(LocalError::TransactionError(
+            "Failed to parse anvil docker private key".to_string(),
+        ))
     })?;
 
     Ok(AnvilGuard {
@@ -711,17 +808,28 @@ fn start_anvil_docker(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<Local
 }
 
 fn docker_available() -> bool {
-    Command::new("docker").arg("info").output().map(|output| output.status.success()).unwrap_or(false)
+    Command::new("docker")
+        .arg("info")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn docker_host_port(name: &str, port: &str) -> Result<String, Box<LocalError>> {
     let output = Command::new("docker")
         .arg("inspect")
         .arg("-f")
-        .arg(format!("{{{{(index (index .NetworkSettings.Ports \"{}\") 0).HostPort}}}}", port))
+        .arg(format!(
+            "{{{{(index (index .NetworkSettings.Ports \"{}\") 0).HostPort}}}}",
+            port
+        ))
         .arg(name)
         .output()
-        .map_err(|e| Box::new(LocalError::TransactionError(format!("Failed to inspect docker port: {e}"))))?;
+        .map_err(|e| {
+            Box::new(LocalError::TransactionError(format!(
+                "Failed to inspect docker port: {e}"
+            )))
+        })?;
 
     if !output.status.success() {
         return Err(Box::new(LocalError::TransactionError(
@@ -731,7 +839,9 @@ fn docker_host_port(name: &str, port: &str) -> Result<String, Box<LocalError>> {
 
     let port = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if port.is_empty() {
-        return Err(Box::new(LocalError::TransactionError("Docker inspect returned empty port".to_string())));
+        return Err(Box::new(LocalError::TransactionError(
+            "Docker inspect returned empty port".to_string(),
+        )));
     }
 
     Ok(port)

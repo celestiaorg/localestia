@@ -52,7 +52,10 @@ async fn process_server_supports_all_methods() {
         .await
         .expect("blob_get failed");
     ctx.client
-        .blob_submit(std::slice::from_ref(&blob), celestia_rpc::TxConfig::default())
+        .blob_submit(
+            std::slice::from_ref(&blob),
+            celestia_rpc::TxConfig::default(),
+        )
         .await
         .expect("blob_submit failed");
     ctx.client

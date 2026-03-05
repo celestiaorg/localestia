@@ -1,6 +1,6 @@
 use celestia_rpc::BlobstreamRpcServer;
-use celestia_types::MerkleProof;
 use celestia_types::hash::Hash;
+use celestia_types::MerkleProof;
 use jsonrpsee::core::{async_trait as jsonrpsee_async_trait, RpcResult};
 
 use crate::rpc::{rpc_error, LocalestiaServer};
