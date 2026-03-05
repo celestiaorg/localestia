@@ -26,12 +26,13 @@ use crate::error::LocalError;
 use crate::rpc::LocalestiaServer;
 use crate::storage::RedisStorage;
 use celestia_rpc::{
-    BlobClient, BlobRpcServer, BlobstreamRpcServer, Client, HeaderRpcServer, ShareRpcServer,
-    TxConfig,
+    BlobClient, BlobRpcServer, BlobstreamRpcServer, Client, HeaderRpcServer, TxConfig,
 };
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
 use localestia::relayer::{self, RelayerConfig};
+
+use crate::rpc::ShareRpcServer;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:26658";
 const DEFAULT_REDIS_URL: &str = "redis://127.0.0.1:6379";
@@ -853,7 +854,7 @@ async fn wait_for_redis(redis_url: &str) -> Result<(), Box<LocalError>> {
 
     loop {
         match redis::Client::open(redis_url) {
-            Ok(client) => match client.get_async_connection().await {
+            Ok(client) => match client.get_multiplexed_async_connection().await {
                 Ok(mut conn) => {
                     let pong: redis::RedisResult<String> =
                         redis::cmd("PING").query_async(&mut conn).await;
