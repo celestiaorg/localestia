@@ -575,7 +575,7 @@ impl RedisStorage {
                 // Get blob data with timeout
                 let blob_data: Option<String> = match tokio::time::timeout(
                     std::time::Duration::from_secs(5),
-                    conn.get(&blob_key),
+                    conn.get(blob_key),
                 )
                 .await
                 {
@@ -840,7 +840,7 @@ impl RedisStorage {
     }
 
     pub async fn get_latest_head(&self) -> Result<ExtendedHeader, LocalError> {
-        let height = self.get_current_height().await.map_err(|e| e)?;
+        let height = self.get_current_height().await?;
 
         match self.get_header_by_height(height).await {
             Ok(header) => Ok(header),

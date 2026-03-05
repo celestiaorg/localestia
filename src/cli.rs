@@ -694,7 +694,6 @@ fn start_anvil_local(port: u16, mnemonic: &str) -> Result<AnvilGuard, Box<LocalE
         if let Some(idx) = line.find("Chain ID:") {
             let rest = &line[idx + "Chain ID:".len()..];
             if let Ok(value) = rest
-                .trim()
                 .split_whitespace()
                 .next()
                 .unwrap_or("")
@@ -853,21 +852,15 @@ async fn wait_for_redis(redis_url: &str) -> Result<(), Box<LocalError>> {
     let timeout = Duration::from_secs(10);
 
     loop {
-        match redis::Client::open(redis_url) {
-            Ok(client) => match client.get_multiplexed_async_connection().await {
-                Ok(mut conn) => {
-                    let pong: redis::RedisResult<String> =
-                        redis::cmd("PING").query_async(&mut conn).await;
-                    if let Ok(pong) = pong {
-                        if pong == "PONG" {
-                            return Ok(());
-                        }
-                    }
+        if let Ok(client) = redis::Client::open(redis_url) { if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
+            let pong: redis::RedisResult<String> =
+                redis::cmd("PING").query_async(&mut conn).await;
+            if let Ok(pong) = pong {
+                if pong == "PONG" {
+                    return Ok(());
                 }
-                Err(_) => {}
-            },
-            Err(_) => {}
-        }
+            }
+        } }
 
         if start.elapsed() > timeout {
             return Err(Box::new(LocalError::TransactionError(format!(
