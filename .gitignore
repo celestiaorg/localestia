@@ -1,7 +1,10 @@
 # Rust
-/target/
-/debug/
+target/
 Cargo.lock
+
+# Bun & JS
+bun.lockb
+node_modules/
 
 # Foundry
 contracts/cache/
