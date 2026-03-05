@@ -1,2 +1,20 @@
-/target
-node_modules/
+# Rust
+/target/
+/debug/
+Cargo.lock
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/out.json
+snapshots/
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs/Env
+*.log
+*.env
