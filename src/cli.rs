@@ -499,10 +499,10 @@ fn start_ui_server(
     ui_port: u16,
     rollup_redis_url: &str,
 ) -> Result<Child, Box<LocalError>> {
-    let ui_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui");
+    let ui_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("explorer");
     if !ui_dir.exists() {
         return Err(Box::new(LocalError::TransactionError(
-            "UI directory not found; expected ./ui".to_string(),
+            "UI directory not found; expected ./explorer".to_string(),
         )));
     }
 
