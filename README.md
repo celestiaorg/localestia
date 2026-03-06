@@ -33,6 +33,7 @@ Defaults if unset:
 
 - `REDIS_URL=redis://127.0.0.1:6379`
 - `LISTEN_ADDR=127.0.0.1:26658`
+- `GRPC_ADDR=0.0.0.0:9090`
 
 Localestia clears the Redis database on startup.
 
@@ -51,6 +52,29 @@ LOCALESTIA_REDIS_MODE=docker cargo test
 ```
 
 You can also use `LOCALESTIA_REDIS_MODE=auto` to prefer a local `REDIS_URL` if set and fall back to Docker when available.
+
+### gRPC integration tests
+
+The `grpc` test suite starts a real localestia process on ephemeral ports and exercises all five gRPC services via generated tonic client stubs:
+
+```bash
+# With a local Redis already running:
+LOCALESTIA_REDIS_MODE=local cargo test --test grpc -- --test-threads=1
+
+# Or let the test harness spin up a Redis container:
+LOCALESTIA_REDIS_MODE=docker cargo test --test grpc -- --test-threads=1
+```
+
+`--test-threads=1` is required because each test acquires a global lock (one localestia process at a time). The tests cover:
+
+| Test | gRPC service | What is verified |
+|---|---|---|
+| `test_get_node_info` | `cosmos.base.tendermint.v1beta1.Service` | moniker=`localestia`, network=`private` |
+| `test_account` | `cosmos.auth.v1beta1.Query` | account_number=1, sequence=0 |
+| `test_broadcast_tx_empty` | `cosmos.tx.v1beta1.Service` | code=0, height=0 for an empty tx |
+| `test_tx_status_unknown_returns_committed` | `celestia.core.v1.tx.Tx` | status=`COMMITTED`, height=1 for unknown tx |
+| `test_estimate_gas_price` | `celestia.core.v1.gas_estimation.GasEstimator` | price=0.002 |
+| `test_estimate_gas_price_and_usage` | `celestia.core.v1.gas_estimation.GasEstimator` | price=0.002, gas_used=500 000 |
 
 ## Supported RPC Methods
 

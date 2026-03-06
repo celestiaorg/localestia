@@ -505,6 +505,54 @@ async fn wait_for_port(listen_addr: &str) {
     }
 }
 
+pub struct GrpcProcessTestContext {
+    pub client: Client,
+    pub http_url: String,
+    pub grpc_addr: String,
+    _child: Child,
+    _redis: RedisTestGuard,
+    _lock: MutexGuard<'static, ()>,
+}
+
+impl Drop for GrpcProcessTestContext {
+    fn drop(&mut self) {
+        let _ = self._child.kill();
+        let _ = self._child.wait();
+    }
+}
+
+pub async fn setup_process_grpc() -> GrpcProcessTestContext {
+    let lock = TEST_LOCK.lock().await;
+    let redis = setup_redis().await;
+    let redis_url = redis.url.clone();
+    let listen_addr = reserve_listen_addr();
+    let grpc_addr = reserve_listen_addr();
+    let bin_path = resolve_localestia_bin();
+
+    let child = Command::new(&bin_path)
+        .env("REDIS_URL", &redis_url)
+        .env("LISTEN_ADDR", &listen_addr)
+        .env("GRPC_ADDR", &grpc_addr)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("failed to start localestia process");
+
+    wait_for_port(&listen_addr).await;
+    wait_for_port(&grpc_addr).await;
+    let ws_url = format!("ws://{}", listen_addr);
+    let client = wait_for_client(&ws_url).await;
+
+    GrpcProcessTestContext {
+        client,
+        http_url: format!("http://{}", listen_addr),
+        grpc_addr,
+        _child: child,
+        _redis: redis,
+        _lock: lock,
+    }
+}
+
 async fn wait_for_client(ws_url: &str) -> Client {
     let start = Instant::now();
     let timeout = Duration::from_secs(10);
