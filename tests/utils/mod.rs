@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
 use celestia_rpc::prelude::*;
-use celestia_rpc::{BlobRpcServer, BlobstreamRpcServer, HeaderRpcServer, ShareRpcServer};
+use celestia_rpc::{BlobRpcServer, BlobstreamRpcServer, HeaderRpcServer};
 use celestia_rpc::{Client, TxConfig};
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee_core::client::Error as RpcError;
 use jsonrpsee_types::error::{INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE};
-use localestia::rpc::{LocalestiaServer, ShareRpcServer as LocalShareRpcServer};
+use localestia::rpc::{LocalestiaServer, ShareRpcServer};
 use localestia::storage::RedisStorage;
 use once_cell::sync::Lazy;
 use std::env;

@@ -147,7 +147,7 @@ binary automatically.
 The demo command runs the UI using Bun + ElysiaJS. You can run it manually:
 
 ```bash
-cd ui
+cd explorer
 bun install
 CELESTIA_HTTP_URL=http://127.0.0.1:26658 \
 ETH_RPC_URL=http://127.0.0.1:8545 \
