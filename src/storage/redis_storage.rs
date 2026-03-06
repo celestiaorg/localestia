@@ -77,9 +77,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let height_namespaces_key = format!("height_namespaces:{}", height);
 
@@ -205,9 +205,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         // Store the blob with timeout
         match tokio::time::timeout(
@@ -326,9 +326,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let ns_hex = hex::encode(namespace.as_bytes());
         let commitment_hex = hex::encode(commitment.hash());
@@ -539,9 +539,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let mut all_blobs = Vec::new();
 
@@ -575,7 +575,7 @@ impl RedisStorage {
                 // Get blob data with timeout
                 let blob_data: Option<String> = match tokio::time::timeout(
                     std::time::Duration::from_secs(5),
-                    conn.get(&blob_key),
+                    conn.get(blob_key),
                 )
                 .await
                 {
@@ -631,9 +631,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let hash = header.hash();
         let hash_hex = hex::encode(hash.as_bytes());
@@ -717,9 +717,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let header_key = format!("header:{}", height);
         let header_data: Option<String> = conn
@@ -758,9 +758,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let hash_hex = hex::encode(hash.as_bytes());
         let hash_key = format!("header_hash:{}", hash_hex);
@@ -840,7 +840,7 @@ impl RedisStorage {
     }
 
     pub async fn get_latest_head(&self) -> Result<ExtendedHeader, LocalError> {
-        let height = self.get_current_height().await.map_err(|e| e)?;
+        let height = self.get_current_height().await?;
 
         match self.get_header_by_height(height).await {
             Ok(header) => Ok(header),
@@ -868,9 +868,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         let eds_key = format!("eds:{}", height);
         let eds_data: Option<String> = conn.get(&eds_key).await.map_err(LocalError::RedisError)?;
@@ -1221,9 +1221,9 @@ impl RedisStorage {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| {
-            error!("Failed to get Redis connection: {}", e);
-            LocalError::RedisError(e)
-        })?;
+                error!("Failed to get Redis connection: {}", e);
+                LocalError::RedisError(e)
+            })?;
 
         // Explicitly specify the return type as String for the FLUSHDB command
         let _: String = redis::cmd("FLUSHDB")

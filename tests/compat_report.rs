@@ -4,7 +4,7 @@ use celestia_rpc::prelude::*;
 use celestia_types::AppVersion;
 
 use jsonrpsee_core::client::Error as RpcError;
-use utils::{RpcOutcome, classify_error, make_blob, make_namespace, setup, submit_blob};
+use utils::{classify_error, make_blob, make_namespace, setup, submit_blob, RpcOutcome};
 
 fn record<T>(name: &str, result: Result<T, RpcError>) -> (String, RpcOutcome) {
     let outcome = match result {
@@ -48,7 +48,10 @@ async fn compatibility_report() {
         "header.WaitForHeight",
         ctx.client.header_wait_for_height(height).await,
     ));
-    results.push(record("header.LocalHead", ctx.client.header_local_head().await));
+    results.push(record(
+        "header.LocalHead",
+        ctx.client.header_local_head().await,
+    ));
     results.push(record(
         "header.NetworkHead",
         ctx.client.header_network_head().await,
@@ -57,7 +60,10 @@ async fn compatibility_report() {
         "header.SyncState",
         ctx.client.header_sync_state().await,
     ));
-    results.push(record("header.SyncWait", ctx.client.header_sync_wait().await));
+    results.push(record(
+        "header.SyncWait",
+        ctx.client.header_sync_wait().await,
+    ));
 
     results.push(record(
         "blob.Get",
@@ -68,7 +74,10 @@ async fn compatibility_report() {
     results.push(record(
         "blob.Submit",
         ctx.client
-            .blob_submit(std::slice::from_ref(&blob), celestia_rpc::TxConfig::default())
+            .blob_submit(
+                std::slice::from_ref(&blob),
+                celestia_rpc::TxConfig::default(),
+            )
             .await,
     ));
     results.push(record(
@@ -97,10 +106,7 @@ async fn compatibility_report() {
             }
         }
         Err(err) => {
-            results.push((
-                "blob.GetProof".to_string(),
-                classify_error(err),
-            ));
+            results.push(("blob.GetProof".to_string(), classify_error(err)));
             results.push((
                 "blob.Included".to_string(),
                 RpcOutcome::Skipped("proof unavailable"),
@@ -109,12 +115,27 @@ async fn compatibility_report() {
     }
 
     results.push(record(
+        "blobstream.GetDataRootTupleRoot",
+        ctx.client
+            .blobstream_get_data_root_tuple_root(height, height + 1)
+            .await,
+    ));
+    results.push(record(
+        "blobstream.GetDataRootTupleInclusionProof",
+        ctx.client
+            .blobstream_get_data_root_tuple_inclusion_proof(height, height, height + 1)
+            .await,
+    ));
+
+    results.push(record(
         "share.GetEDS",
         ctx.client.share_get_eds(height, AppVersion::V3).await,
     ));
     results.push(record(
         "share.GetRange",
-        ctx.client.share_get_range(height, AppVersion::V3, 0, 1).await,
+        ctx.client
+            .share_get_range(height, AppVersion::V3, 0, 1)
+            .await,
     ));
     results.push(record(
         "share.GetSamples",

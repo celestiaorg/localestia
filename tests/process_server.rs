@@ -52,7 +52,10 @@ async fn process_server_supports_all_methods() {
         .await
         .expect("blob_get failed");
     ctx.client
-        .blob_submit(std::slice::from_ref(&blob), celestia_rpc::TxConfig::default())
+        .blob_submit(
+            std::slice::from_ref(&blob),
+            celestia_rpc::TxConfig::default(),
+        )
         .await
         .expect("blob_submit failed");
     ctx.client
@@ -73,6 +76,15 @@ async fn process_server_supports_all_methods() {
         .await
         .expect("blob_included failed");
     assert!(included, "blob_included reported false for stored blob");
+
+    ctx.client
+        .blobstream_get_data_root_tuple_root(height, height + 1)
+        .await
+        .expect("blobstream_get_data_root_tuple_root failed");
+    ctx.client
+        .blobstream_get_data_root_tuple_inclusion_proof(height, height, height + 1)
+        .await
+        .expect("blobstream_get_data_root_tuple_inclusion_proof failed");
 
     ctx.client
         .share_get_eds(height, AppVersion::V3)

@@ -1,1 +1,23 @@
-/target
+# Rust
+target/
+Cargo.lock
+
+# Bun & JS
+bun.lockb
+node_modules/
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/out.json
+snapshots/
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs/Env
+*.log
+*.env

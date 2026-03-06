@@ -26,14 +26,11 @@ fn curl_rpc(url: &str, payload: &Value) -> Value {
         });
 
     if !output.status.success() {
-        panic!(
-            "curl failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        panic!("curl failed: {}", String::from_utf8_lossy(&output.stderr));
     }
 
-    let value: Value = serde_json::from_slice(&output.stdout)
-        .expect("curl returned invalid JSON-RPC response");
+    let value: Value =
+        serde_json::from_slice(&output.stdout).expect("curl returned invalid JSON-RPC response");
 
     if let Some(error) = value.get("error") {
         panic!("JSON-RPC error response: {error}");

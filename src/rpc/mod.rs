@@ -1,4 +1,5 @@
 mod blob;
+mod blobstream;
 mod header;
 pub mod server;
 mod share;

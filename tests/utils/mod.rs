@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
 use celestia_rpc::prelude::*;
-use celestia_rpc::{BlobRpcServer, HeaderRpcServer};
+use celestia_rpc::{BlobRpcServer, BlobstreamRpcServer, HeaderRpcServer};
 use celestia_rpc::{Client, TxConfig};
 use celestia_types::nmt::Namespace;
 use celestia_types::{AppVersion, Blob};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee_core::client::Error as RpcError;
 use jsonrpsee_types::error::{INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE};
-use localestia::rpc::{LocalestiaServer, ShareRpcServer as LocalShareRpcServer};
+use localestia::rpc::{LocalestiaServer, ShareRpcServer};
 use localestia::storage::RedisStorage;
 use once_cell::sync::Lazy;
 use std::env;
@@ -82,8 +82,11 @@ pub async fn setup() -> TestContext {
         .merge(HeaderRpcServer::into_rpc(rpc_server.clone()))
         .expect("failed to merge header RPC module");
     module
-        .merge(LocalShareRpcServer::into_rpc(rpc_server))
+        .merge(ShareRpcServer::into_rpc(rpc_server.clone()))
         .expect("failed to merge share RPC module");
+    module
+        .merge(BlobstreamRpcServer::into_rpc(rpc_server))
+        .expect("failed to merge blobstream RPC module");
     let server_handle = server.start(module);
 
     let ws_url = format!("ws://{}", local_addr);
@@ -258,7 +261,11 @@ fn target_profile_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"));
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let profile = if profile == "release" { "release" } else { "debug" };
+    let profile = if profile == "release" {
+        "release"
+    } else {
+        "debug"
+    };
     target_dir.join(profile)
 }
 
