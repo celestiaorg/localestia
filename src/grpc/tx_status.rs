@@ -5,7 +5,7 @@ use celestia_proto::celestia::core::v1::tx::{
     TxStatusBatchRequest, TxStatusBatchResponse, TxStatusRequest, TxStatusResponse,
 };
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::storage::RedisStorage;
 
@@ -32,12 +32,14 @@ impl Tx for TxStatusService {
         let tx_id = request.into_inner().tx_id;
         info!("TxStatus: tx_id={}", tx_id);
 
-        let height = self
-            .storage
-            .get_tx_height(&tx_id)
-            .await
-            .unwrap_or(None)
-            .unwrap_or(1);
+        let height = match self.storage.get_tx_height(&tx_id).await {
+            Ok(Some(h)) => h,
+            Ok(None) => 1,
+            Err(e) => {
+                error!("TxStatus: storage error for tx_id={}: {}", tx_id, e);
+                return Err(Status::internal(format!("storage error: {e}")));
+            }
+        };
         info!("TxStatus: resolved height={}", height);
 
         Ok(Response::new(TxStatusResponse {

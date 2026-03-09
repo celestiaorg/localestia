@@ -14,6 +14,7 @@ mod tx_status;
 pub async fn serve(
     storage: Arc<RedisStorage>,
     addr: std::net::SocketAddr,
+    shutdown: impl std::future::Future<Output = ()>,
 ) -> Result<(), tonic::transport::Error> {
     info!("Starting gRPC server on {}", addr);
 
@@ -23,6 +24,6 @@ pub async fn serve(
         .add_service(tx_service::service(storage.clone()))
         .add_service(tx_status::service(storage.clone()))
         .add_service(gas_estimator::service(storage.clone()))
-        .serve(addr)
+        .serve_with_shutdown(addr, shutdown)
         .await
 }

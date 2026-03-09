@@ -103,24 +103,31 @@ async fn main() -> Result<(), Box<LocalError>> {
     info!("JSON-RPC server started at ws://{}", listen_addr);
 
     // Start gRPC server concurrently
+    let (grpc_shutdown_tx, grpc_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let grpc_storage = storage.clone();
-    let grpc_task = tokio::spawn(async move {
-        if let Err(e) = grpc::serve(grpc_storage, grpc_socket).await {
+    let mut grpc_task = tokio::spawn(async move {
+        if let Err(e) =
+            grpc::serve(grpc_storage, grpc_socket, async { let _ = grpc_shutdown_rx.await; }).await
+        {
             error!("gRPC server error: {}", e);
         }
     });
 
-    // Keep both servers running until Ctrl+C
+    // Keep both servers running until Ctrl+C or gRPC task exits
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             info!("Received shutdown signal");
         }
-        _ = grpc_task => {
+        _ = &mut grpc_task => {
             error!("gRPC server exited unexpectedly");
         }
     }
 
     info!("Shutting down...");
+
+    // Signal gRPC server to stop and wait for it to drain
+    let _ = grpc_shutdown_tx.send(());
+    grpc_task.await.ok();
 
     if let Err(e) = server_handle.stop() {
         error!("Error stopping JSON-RPC server: {}", e);

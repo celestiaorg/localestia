@@ -57,11 +57,15 @@ impl Service for TxService {
                 info!("Decoded BlobTx with {} blobs", blob_tx.blobs.len());
                 let mut celestia_blobs = Vec::new();
                 for blob_proto in blob_tx.blobs {
-                    let ns = Namespace::new(
-                        blob_proto.namespace_version as u8,
-                        &blob_proto.namespace_id,
-                    )
-                    .map_err(|e| Status::invalid_argument(format!("invalid namespace: {e}")))?;
+                    let ns_version =
+                        u8::try_from(blob_proto.namespace_version).map_err(|_| {
+                            Status::invalid_argument(format!(
+                                "invalid namespace version: {}",
+                                blob_proto.namespace_version
+                            ))
+                        })?;
+                    let ns = Namespace::new(ns_version, &blob_proto.namespace_id)
+                        .map_err(|e| Status::invalid_argument(format!("invalid namespace: {e}")))?;
 
                     match Blob::new(ns, blob_proto.data, None, AppVersion::V2) {
                         Ok(blob) => celestia_blobs.push(blob),
