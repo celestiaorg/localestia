@@ -1213,6 +1213,28 @@ impl RedisStorage {
         Ok(response)
     }
 
+    pub async fn store_tx_height(&self, tx_hash: &str, height: u64) -> Result<(), LocalError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(LocalError::RedisError)?;
+        let key = format!("tx:height:{}", tx_hash);
+        let _: () = conn.set(key, height).await.map_err(LocalError::RedisError)?;
+        Ok(())
+    }
+
+    pub async fn get_tx_height(&self, tx_hash: &str) -> Result<Option<u64>, LocalError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(LocalError::RedisError)?;
+        let key = format!("tx:height:{}", tx_hash);
+        let val: Option<u64> = conn.get(key).await.map_err(LocalError::RedisError)?;
+        Ok(val)
+    }
+
     pub async fn clear_database(&self) -> Result<(), LocalError> {
         info!("Clearing Redis database");
 

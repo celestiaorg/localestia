@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tracing::{error, info};
 
 mod error;
+mod grpc;
 mod rpc;
 mod storage;
 mod types;
@@ -26,8 +27,9 @@ async fn main() -> Result<(), Box<LocalError>> {
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let listen_addr =
         std::env::var("LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:26658".to_string());
+    let grpc_addr =
+        std::env::var("GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:9090".to_string());
 
-    // Create a new error variant for AddrParseError
     let addr: SocketAddr = listen_addr.parse().map_err(|e| {
         Box::new(LocalError::TransactionError(format!(
             "Failed to parse address: {}",
@@ -35,9 +37,17 @@ async fn main() -> Result<(), Box<LocalError>> {
         )))
     })?;
 
+    let grpc_socket: SocketAddr = grpc_addr.parse().map_err(|e| {
+        Box::new(LocalError::TransactionError(format!(
+            "Failed to parse gRPC address: {}",
+            e
+        )))
+    })?;
+
     info!("Starting local Celestia Blob RPC server...");
     info!("Redis URL: {}", redis_url);
-    info!("Listening on: {}", listen_addr);
+    info!("JSON-RPC listening on: {}", listen_addr);
+    info!("gRPC listening on: {}", grpc_addr);
 
     // Initialize Redis storage
     let storage = match RedisStorage::new(&redis_url) {
@@ -88,33 +98,42 @@ async fn main() -> Result<(), Box<LocalError>> {
         )))
     })?;
 
-    // Register our RPC methods (both Blob and Header)
     let server_handle = server.start(module);
 
-    info!("Server started successfully");
-    info!(
-        "The server is ready to accept RPC calls at ws://{}",
-        listen_addr
-    );
-    info!(
-        "Connect using: celestia-rpc::Client::new(\"ws://{}\", None)",
-        listen_addr
-    );
+    info!("JSON-RPC server started at ws://{}", listen_addr);
 
-    // Keep the server running until Ctrl+C
-    match tokio::signal::ctrl_c().await {
-        Ok(_) => info!("Received shutdown signal"),
-        Err(e) => error!("Failed to listen for ctrl-c: {}", e),
+    // Start gRPC server concurrently
+    let (grpc_shutdown_tx, grpc_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let grpc_storage = storage.clone();
+    let mut grpc_task = tokio::spawn(async move {
+        if let Err(e) =
+            grpc::serve(grpc_storage, grpc_socket, async { let _ = grpc_shutdown_rx.await; }).await
+        {
+            error!("gRPC server error: {}", e);
+        }
+    });
+
+    // Keep both servers running until Ctrl+C or gRPC task exits
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received shutdown signal");
+        }
+        _ = &mut grpc_task => {
+            error!("gRPC server exited unexpectedly");
+        }
     }
 
-    info!("Shutting down server...");
+    info!("Shutting down...");
 
-    // Stop the server
+    // Signal gRPC server to stop and wait for it to drain
+    let _ = grpc_shutdown_tx.send(());
+    grpc_task.await.ok();
+
     if let Err(e) = server_handle.stop() {
-        error!("Error stopping server: {}", e);
+        error!("Error stopping JSON-RPC server: {}", e);
     }
 
-    info!("Server shutdown complete");
+    info!("Shutdown complete");
 
     Ok(())
 }
